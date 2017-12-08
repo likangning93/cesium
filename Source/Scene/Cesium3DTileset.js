@@ -547,14 +547,6 @@ define([
         this.pointAttenuationMaxSize = 10.0;
 
         /**
-         * For point cloud tiles, the distance from the point at which point attenuation starts to be applied.
-         *
-         * @type Number
-         * @default 100.0
-         */
-        this.pointAttenuationStartDistance = 100.0;
-
-        /**
          * This property is for debugging only; it is not optimized for production use.
          * <p>
          * Determines if only the tiles from last frame should be used for rendering.  This

@@ -1,4 +1,5 @@
 define([
+        '../Core/Cartesian2',
         '../Core/Cartesian3',
         '../Core/Cartesian4',
         '../Core/Color',
@@ -32,6 +33,7 @@ define([
         './SceneMode',
         './ShadowMode'
     ], function(
+        Cartesian2,
         Cartesian3,
         Cartesian4,
         Color,
@@ -125,7 +127,19 @@ define([
 
         this._pointSize = 1.0;
         this._pointAttenuationMaxSize = 10.0;
-        this._pointAttenuationStartDistance = 100.0;
+
+        // TODO: figure out an approximation for this when tile.refine === Cesium3DTileRefine.ADD
+        var interpointDistance = tile.geometricError * 0.70710678118;
+        if (tile.children.length === 0) // leaf
+        {
+            var boundingSphereRadius = tile._boundingVolume._boundingSphere.radius;
+            var volumeApproximation = boundingSphereRadius * boundingSphereRadius * boundingSphereRadius;
+            var parentBoundingSphereRadius = tile.parent._boundingVolume._boundingSphere.radius;
+            var parentVolumeApproximation = parentBoundingSphereRadius * parentBoundingSphereRadius * parentBoundingSphereRadius;
+            interpointDistance = tile.parent.geometricError * (volumeApproximation / parentVolumeApproximation);
+        }
+
+        this._interpointDistance = interpointDistance;
         this._quantizedVolumeScale = undefined;
         this._quantizedVolumeOffset = undefined;
 
@@ -443,7 +457,8 @@ define([
         content._hasBatchIds = defined(batchIds);
     }
 
-    var scratchPointSizeAndTilesetTimeAndAttenuation = new Cartesian3();
+    var scratchPointSizeAndTilesetTimeAndInterpointDistance = new Cartesian3();
+    var scratchPointAttenuationMaxSizeAndDepthMultiplier = new Cartesian2();
 
     var positionLocation = 0;
     var colorLocation = 1;
@@ -515,14 +530,16 @@ define([
         }
 
         var uniformMap = {
-            u_pointAttenuationMaxSize : function() {
-                return content._pointAttenuationMaxSize;
+            u_pointAttenuationMaxSizeAndSseDepthMultiplier : function() {
+                scratchPointAttenuationMaxSizeAndDepthMultiplier.x = content._pointAttenuationMaxSize;
+                scratchPointAttenuationMaxSizeAndDepthMultiplier.y = context.drawingBufferHeight / frameState.camera.frustum.sseDenominator;
+                return scratchPointAttenuationMaxSizeAndDepthMultiplier;
             },
-            u_pointSizeAndTilesetTimeAndAttenuation : function() {
-                scratchPointSizeAndTilesetTimeAndAttenuation.x = content._pointSize;
-                scratchPointSizeAndTilesetTimeAndAttenuation.y = content._tileset.timeSinceLoad;
-                scratchPointSizeAndTilesetTimeAndAttenuation.z = content._pointAttenuationStartDistance;
-                return scratchPointSizeAndTilesetTimeAndAttenuation;
+            u_pointSizeAndTilesetTimeAndInterpointDistance : function() {
+                scratchPointSizeAndTilesetTimeAndInterpointDistance.x = content._pointSize;
+                scratchPointSizeAndTilesetTimeAndInterpointDistance.y = content._tileset.timeSinceLoad;
+                scratchPointSizeAndTilesetTimeAndInterpointDistance.z = content._interpointDistance;
+                return scratchPointSizeAndTilesetTimeAndInterpointDistance;
             },
             u_highlightColor : function() {
                 return content._highlightColor;
@@ -907,13 +924,15 @@ define([
 
         var vs = 'attribute vec3 a_position; \n' +
                  'varying vec4 v_color; \n' +
-                 'uniform float u_pointAttenuationMaxSize; \n' +
-                 'uniform vec3 u_pointSizeAndTilesetTimeAndAttenuation; \n' +
+                 'uniform vec2 u_pointAttenuationMaxSizeAndSseDepthMultiplier; \n' +
+                 'uniform vec3 u_pointSizeAndTilesetTimeAndInterpointDistance; \n' +
                  'uniform vec4 u_constantColor; \n' +
                  'uniform vec4 u_highlightColor; \n' +
                  'float u_pointSize; \n' +
                  'float u_tilesetTime; \n' +
-                 'float u_pointAttenuationStartDistance; \n';
+                 'float u_pointAttenuationMaxSize; \n' +
+                 'float u_sseDepthMultiplier; \n' +
+                 'float u_interpointDistance; \n';
 
         vs += attributeDeclarations;
 
@@ -962,9 +981,11 @@ define([
 
         vs += 'void main() \n' +
               '{ \n' +
-              '    u_pointSize = u_pointSizeAndTilesetTimeAndAttenuation.x; \n' +
-              '    u_tilesetTime = u_pointSizeAndTilesetTimeAndAttenuation.y; \n' +
-              '    u_pointAttenuationStartDistance = u_pointSizeAndTilesetTimeAndAttenuation.z; \n';
+              '    u_pointSize = u_pointSizeAndTilesetTimeAndInterpointDistance.x; \n' +
+              '    u_tilesetTime = u_pointSizeAndTilesetTimeAndInterpointDistance.y; \n' +
+              '    u_pointAttenuationMaxSize = u_pointAttenuationMaxSizeAndSseDepthMultiplier.x; \n' +
+              '    u_sseDepthMultiplier = u_pointAttenuationMaxSizeAndSseDepthMultiplier.y; \n' +
+              '    u_interpointDistance = u_pointSizeAndTilesetTimeAndInterpointDistance.z; \n';
 
         if (usesColors) {
             if (isTranslucent) {
@@ -1019,8 +1040,8 @@ define([
         if (pointAttenuation) {
             vs += '    vec4 positionEC = czm_view * vec4(positionWC, 1.0); \n' +
                   '    float depth = -positionEC.z; \n' +
-                  '    float attenuationFactor = min(depth, u_pointAttenuationStartDistance) / u_pointAttenuationStartDistance; \n' +
-                  '    gl_PointSize *= mix(u_pointAttenuationMaxSize, 1.0, attenuationFactor); \n';
+                  // compute SSE for this point
+                  '    gl_PointSize = min((u_interpointDistance / depth) * u_sseDepthMultiplier, u_pointAttenuationMaxSize); \n';
         }
 
 
