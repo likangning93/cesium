@@ -513,6 +513,30 @@ define([
         this.immediatelyLoadDesiredLevelOfDetail = defaultValue(options.immediatelyLoadDesiredLevelOfDetail, false);
 
         /**
+         * For point cloud tiles, the point size in pixels.
+         *
+         * @type Number
+         * @default 1.0
+         */
+        this.pointSize = 1.0;
+
+        /**
+         * For point cloud tiles, whether to scale points as they get closer to the camera.
+         *
+         * @type {Boolean}
+         * @default true
+         */
+        this.pointAttenuation = false;
+
+        /**
+         * For point cloud tiles, max point size in pixels.
+         *
+         * @type Number
+         * @default 10.0
+         */
+        this.pointAttenuationMaxSize = 10.0;
+
+        /**
          * Determines whether siblings of visible tiles are always downloaded during traversal.
          * This may be useful for ensuring that tiles are already available when the viewer turns left/right.
          * <p>

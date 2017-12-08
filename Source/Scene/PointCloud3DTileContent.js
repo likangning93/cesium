@@ -1,71 +1,71 @@
 define([
-        '../Core/Cartesian2',
-        '../Core/Cartesian3',
-        '../Core/Cartesian4',
-        '../Core/Color',
-        '../Core/combine',
-        '../Core/ComponentDatatype',
-        '../Core/defaultValue',
-        '../Core/defined',
-        '../Core/defineProperties',
-        '../Core/destroyObject',
-        '../Core/DeveloperError',
-        '../Core/FeatureDetection',
-        '../Core/getStringFromTypedArray',
-        '../Core/Matrix4',
-        '../Core/oneTimeWarning',
-        '../Core/PrimitiveType',
-        '../Core/RuntimeError',
-        '../Core/Transforms',
-        '../Renderer/Buffer',
-        '../Renderer/BufferUsage',
-        '../Renderer/DrawCommand',
-        '../Renderer/Pass',
-        '../Renderer/RenderState',
-        '../Renderer/ShaderProgram',
-        '../Renderer/ShaderSource',
-        '../Renderer/VertexArray',
-        '../ThirdParty/when',
-        './BlendingState',
-        './Cesium3DTileBatchTable',
-        './Cesium3DTileFeature',
-        './Cesium3DTileFeatureTable',
-        './SceneMode',
-        './ShadowMode'
-    ], function(
-        Cartesian2,
-        Cartesian3,
-        Cartesian4,
-        Color,
-        combine,
-        ComponentDatatype,
-        defaultValue,
-        defined,
-        defineProperties,
-        destroyObject,
-        DeveloperError,
-        FeatureDetection,
-        getStringFromTypedArray,
-        Matrix4,
-        oneTimeWarning,
-        PrimitiveType,
-        RuntimeError,
-        Transforms,
-        Buffer,
-        BufferUsage,
-        DrawCommand,
-        Pass,
-        RenderState,
-        ShaderProgram,
-        ShaderSource,
-        VertexArray,
-        when,
-        BlendingState,
-        Cesium3DTileBatchTable,
-        Cesium3DTileFeature,
-        Cesium3DTileFeatureTable,
-        SceneMode,
-        ShadowMode) {
+    '../Core/Cartesian2',
+    '../Core/Cartesian3',
+    '../Core/Cartesian4',
+    '../Core/Color',
+    '../Core/combine',
+    '../Core/ComponentDatatype',
+    '../Core/defaultValue',
+    '../Core/defined',
+    '../Core/defineProperties',
+    '../Core/destroyObject',
+    '../Core/DeveloperError',
+    '../Core/FeatureDetection',
+    '../Core/getStringFromTypedArray',
+    '../Core/Matrix4',
+    '../Core/oneTimeWarning',
+    '../Core/PrimitiveType',
+    '../Core/RuntimeError',
+    '../Core/Transforms',
+    '../Renderer/Buffer',
+    '../Renderer/BufferUsage',
+    '../Renderer/DrawCommand',
+    '../Renderer/Pass',
+    '../Renderer/RenderState',
+    '../Renderer/ShaderProgram',
+    '../Renderer/ShaderSource',
+    '../Renderer/VertexArray',
+    '../ThirdParty/when',
+    './BlendingState',
+    './Cesium3DTileBatchTable',
+    './Cesium3DTileFeature',
+    './Cesium3DTileFeatureTable',
+    './SceneMode',
+    './ShadowMode'
+], function(
+    Cartesian2,
+    Cartesian3,
+    Cartesian4,
+    Color,
+    combine,
+    ComponentDatatype,
+    defaultValue,
+    defined,
+    defineProperties,
+    destroyObject,
+    DeveloperError,
+    FeatureDetection,
+    getStringFromTypedArray,
+    Matrix4,
+    oneTimeWarning,
+    PrimitiveType,
+    RuntimeError,
+    Transforms,
+    Buffer,
+    BufferUsage,
+    DrawCommand,
+    Pass,
+    RenderState,
+    ShaderProgram,
+    ShaderSource,
+    VertexArray,
+    when,
+    BlendingState,
+    Cesium3DTileBatchTable,
+    Cesium3DTileFeature,
+    Cesium3DTileFeatureTable,
+    SceneMode,
+    ShadowMode) {
     'use strict';
 
     // Bail out if the browser doesn't support typed arrays, to prevent the setup function
@@ -121,8 +121,25 @@ define([
         this._translucentRenderState = undefined;
 
         this._highlightColor = Color.clone(Color.WHITE);
+
+        this.pointAttenuation = true;
+        this._pointAttenuation = true;
+
         this._pointSize = 1.0;
-        this._pointAttenuationMaxSize = 1.0;
+        this._pointAttenuationMaxSize = 10.0;
+
+        // TODO: figure out an approximation for this when tile.refine === Cesium3DTileRefine.ADD
+        var interpointDistance = tile.geometricError * 0.70710678118;
+        if (tile.children.length === 0) // leaf
+        {
+            var boundingSphereRadius = tile._boundingVolume._boundingSphere.radius;
+            var volumeApproximation = boundingSphereRadius * boundingSphereRadius * boundingSphereRadius;
+            var parentBoundingSphereRadius = tile.parent._boundingVolume._boundingSphere.radius;
+            var parentVolumeApproximation = parentBoundingSphereRadius * parentBoundingSphereRadius * parentBoundingSphereRadius;
+            interpointDistance = tile.parent.geometricError * (volumeApproximation / parentVolumeApproximation);
+        }
+
+        this._interpointDistance = interpointDistance;
         this._quantizedVolumeScale = undefined;
         this._quantizedVolumeOffset = undefined;
 
@@ -372,7 +389,7 @@ define([
             content._constantColor = Color.fromBytes(constantRGBA[0], constantRGBA[1], constantRGBA[2], constantRGBA[3], content._constantColor);
         } else {
             // Use a default constant color
-            content._constantColor = Color.clone(Color.DARKGRAY, content._constantColor);
+            content._constantColor = Color.clone(Color.WHITE, content._constantColor);
         }
 
         content._isTranslucent = isTranslucent;
@@ -440,7 +457,8 @@ define([
         content._hasBatchIds = defined(batchIds);
     }
 
-    var scratchPointSizeAndTilesetTime = new Cartesian2();
+    var scratchPointSizeAndTilesetTimeAndInterpointDistance = new Cartesian3();
+    var scratchPointAttenuationMaxSizeAndDepthMultiplier = new Cartesian2();
 
     var positionLocation = 0;
     var colorLocation = 1;
@@ -512,13 +530,16 @@ define([
         }
 
         var uniformMap = {
-            u_pointAttenuationMaxSize : function() {
-                return content._pointAttenuationMaxSize;
+            u_pointAttenuationMaxSizeAndSseDepthMultiplier : function() {
+                scratchPointAttenuationMaxSizeAndDepthMultiplier.x = content._pointAttenuationMaxSize;
+                scratchPointAttenuationMaxSizeAndDepthMultiplier.y = context.drawingBufferHeight / frameState.camera.frustum.sseDenominator;
+                return scratchPointAttenuationMaxSizeAndDepthMultiplier;
             },
-            u_pointSizeAndTilesetTime : function() {
-                scratchPointSizeAndTilesetTime.x = content._pointSize;
-                scratchPointSizeAndTilesetTime.y = content._tileset.timeSinceLoad;
-                return scratchPointSizeAndTilesetTime;
+            u_pointSizeAndTilesetTimeAndInterpointDistance : function() {
+                scratchPointSizeAndTilesetTimeAndInterpointDistance.x = content._pointSize;
+                scratchPointSizeAndTilesetTimeAndInterpointDistance.y = content._tileset.timeSinceLoad;
+                scratchPointSizeAndTilesetTimeAndInterpointDistance.z = content._interpointDistance;
+                return scratchPointSizeAndTilesetTimeAndInterpointDistance;
             },
             u_highlightColor : function() {
                 return content._highlightColor;
@@ -790,6 +811,7 @@ define([
         var hasNormals = content._hasNormals;
         var hasBatchIds = content._hasBatchIds;
         var backFaceCulling = content._backFaceCulling;
+        var pointAttenuation = content._pointAttenuation;
         var vertexArray = content._drawCommand.vertexArray;
 
         var colorStyleFunction;
@@ -902,12 +924,15 @@ define([
 
         var vs = 'attribute vec3 a_position; \n' +
                  'varying vec4 v_color; \n' +
-                 'uniform float u_pointAttenuationMaxSize; \n' +
-                 'uniform vec2 u_pointSizeAndTilesetTime; \n' +
+                 'uniform vec2 u_pointAttenuationMaxSizeAndSseDepthMultiplier; \n' +
+                 'uniform vec3 u_pointSizeAndTilesetTimeAndInterpointDistance; \n' +
                  'uniform vec4 u_constantColor; \n' +
                  'uniform vec4 u_highlightColor; \n' +
                  'float u_pointSize; \n' +
-                 'float u_tilesetTime; \n';
+                 'float u_tilesetTime; \n' +
+                 'float u_pointAttenuationMaxSize; \n' +
+                 'float u_sseDepthMultiplier; \n' +
+                 'float u_interpointDistance; \n';
 
         vs += attributeDeclarations;
 
@@ -956,8 +981,11 @@ define([
 
         vs += 'void main() \n' +
               '{ \n' +
-              '    u_pointSize = u_pointSizeAndTilesetTime.x; \n' +
-              '    u_tilesetTime = u_pointSizeAndTilesetTime.y; \n';
+              '    u_pointSize = u_pointSizeAndTilesetTimeAndInterpointDistance.x; \n' +
+              '    u_tilesetTime = u_pointSizeAndTilesetTimeAndInterpointDistance.y; \n' +
+              '    u_pointAttenuationMaxSize = u_pointAttenuationMaxSizeAndSseDepthMultiplier.x; \n' +
+              '    u_sseDepthMultiplier = u_pointAttenuationMaxSizeAndSseDepthMultiplier.y; \n' +
+              '    u_interpointDistance = u_pointSizeAndTilesetTimeAndInterpointDistance.z; \n';
 
         if (usesColors) {
             if (isTranslucent) {
@@ -1009,13 +1037,13 @@ define([
             vs += '    gl_PointSize = u_pointSize; \n';
         }
 
-        vs += '    vec4 positionEC = czm_view * vec4(positionWC, 1.0); \n' +
-              '    positionEC.z *= -1.0; \n\n' +
-              '    float attenuationFactor = \n' +
-              '    ((positionEC.z - czm_clampedFrustum.x) /\n' +
-              '    (czm_clampedFrustum.y - czm_clampedFrustum.x)); \n' +
-              '    gl_PointSize *= mix(u_pointAttenuationMaxSize, 1.0, attenuationFactor); \n\n' +
-              '    color = color * u_highlightColor; \n';
+        if (pointAttenuation) {
+            vs += '    vec4 positionEC = czm_view * vec4(positionWC, 1.0); \n' +
+                  '    float depth = -positionEC.z; \n' +
+                  // compute SSE for this point
+                  '    gl_PointSize = min((u_interpointDistance / depth) * u_sseDepthMultiplier, u_pointAttenuationMaxSize); \n';
+        }
+
 
         if (hasNormals) {
             vs += '    normal = czm_normal * normal; \n' +
@@ -1024,16 +1052,19 @@ define([
                   '    color *= diffuseStrength; \n';
         }
 
-        vs += '    v_color = color; \n' +
+        vs += '    color *= u_highlightColor; \n' +
+              '    v_color = color; \n' +
               '    gl_Position = czm_modelViewProjection * vec4(position, 1.0); \n';
 
         if (hasNormals && backFaceCulling) {
             vs += '    float visible = step(-normal.z, 0.0); \n' +
-                  '    gl_Position *= visible; \n';
+                  '    gl_Position *= visible; \n' +
+                  '    gl_PointSize *= visible; \n';
         }
 
         if (hasShowStyle) {
-            vs += '    gl_Position *= show; \n';
+            vs += '    gl_Position *= show; \n' +
+                  '    gl_PointSize *= show; \n';
         }
 
         vs += '} \n';
@@ -1227,6 +1258,14 @@ define([
             this._backFaceCulling = this.backFaceCulling;
             createShaders(this, frameState, tileset.style);
         }
+
+        this.pointAttenuation = tileset.pointAttenuation;
+        if (this.pointAttenuation !== this._pointAttenuation) {
+            this._pointAttenuation = this.pointAttenuation;
+            createShaders(this, frameState, tileset.style);
+        }
+        this._pointSize = tileset.pointSize;
+        this._pointAttenuationMaxSize = tileset.pointAttenuationMaxSize;
 
         // Update the render state
         var isTranslucent = (this._highlightColor.alpha < 1.0) || (this._constantColor.alpha < 1.0) || this._styleTranslucent;
