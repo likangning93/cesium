@@ -1,9 +1,9 @@
 define([
-        './Credit',
-        './defined'
-    ], function(
-        Credit,
-        defined) {
+    './Credit',
+    './defined'
+], function(
+    Credit,
+    defined) {
     'use strict';
 
     /**
@@ -11,8 +11,7 @@ define([
      *
      * @exports BingMapsApi
      */
-    var BingMapsApi = {
-    };
+    var BingMapsApi = {};
 
     /**
      * The default Bing Maps API key to use if one is not provided to the
@@ -41,7 +40,7 @@ define([
                 console.log(errorString);
                 printedBingWarning = true;
             }
-            return 'AsWE_wlRITl2b5Pr5oThzDwMg7Zh6ghwinCT-QinakkCBU9H2BUb7YQlpZXfPoo4';
+            return 'Aig5SkZ4pNMN8b4rX-RUH2c_95mK-wjb4WL9k50K51faErEGnNsxgpWHXiqS3Rhe';
         }
 
         return BingMapsApi.defaultKey;
@@ -53,7 +52,10 @@ define([
         }
 
         if (!defined(errorCredit)) {
-            errorCredit = new Credit(errorString);
+            errorCredit = new Credit({
+                text : errorString,
+                showOnScreen : true
+            });
         }
 
         return errorCredit;

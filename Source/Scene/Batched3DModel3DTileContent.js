@@ -1,5 +1,4 @@
 define([
-        '../Core/Check',
         '../Core/Color',
         '../Core/defaultValue',
         '../Core/defined',
@@ -17,10 +16,10 @@ define([
         './Cesium3DTileBatchTable',
         './Cesium3DTileFeature',
         './Cesium3DTileFeatureTable',
+        './ClippingPlaneCollection',
         './getAttributeOrUniformBySemantic',
         './Model'
     ], function(
-        Check,
         Color,
         defaultValue,
         defined,
@@ -38,6 +37,7 @@ define([
         Cesium3DTileBatchTable,
         Cesium3DTileFeature,
         Cesium3DTileFeatureTable,
+        ClippingPlaneCollection,
         getAttributeOrUniformBySemantic,
         Model) {
     'use strict';
@@ -377,8 +377,15 @@ define([
             pickFragmentShaderLoaded : batchTable.getPickFragmentShaderCallback(),
             pickUniformMapLoaded : batchTable.getPickUniformMapCallback(),
             addBatchIdToGeneratedShaders : (batchLength > 0), // If the batch table has values in it, generated shaders will need a batchId attribute
-            pickObject : pickObject
+            pickObject : pickObject,
+            clippingPlanes : new ClippingPlaneCollection({
+                enabled : false
+            })
         });
+
+        if (defined(tileset.clippingPlanes)) {
+            content._model.clippingPlanes = tileset.clippingPlanes.clone();
+        }
     }
 
     function createFeatures(content) {
@@ -447,12 +454,22 @@ define([
         this._model.modelMatrix = this._tile.computedTransform;
         this._model.shadows = this._tileset.shadows;
         this._model.debugWireframe = this._tileset.debugWireframe;
+
+        // Update clipping planes
+        var tilesetClippingPlanes = this._tileset.clippingPlanes;
+        if (defined(tilesetClippingPlanes)) {
+            var modelClippingPlanes = this._model.clippingPlanes;
+            tilesetClippingPlanes.clone(modelClippingPlanes);
+            modelClippingPlanes.enabled = tilesetClippingPlanes.enabled && this._tile._isClipped;
+        }
+
         this._model.update(frameState);
 
         // If any commands were pushed, add derived commands
         var commandEnd = frameState.commandList.length;
         if ((commandStart < commandEnd) && frameState.passes.render) {
-            this._batchTable.addDerivedCommands(frameState, commandStart);
+            var finalResolution = this._tile._finalResolution;
+            this._batchTable.addDerivedCommands(frameState, commandStart, finalResolution);
         }
    };
 

@@ -1,71 +1,75 @@
 define([
-    '../Core/Cartesian2',
-    '../Core/Cartesian3',
-    '../Core/Cartesian4',
-    '../Core/Color',
-    '../Core/combine',
-    '../Core/ComponentDatatype',
-    '../Core/defaultValue',
-    '../Core/defined',
-    '../Core/defineProperties',
-    '../Core/destroyObject',
-    '../Core/DeveloperError',
-    '../Core/FeatureDetection',
-    '../Core/getStringFromTypedArray',
-    '../Core/Matrix4',
-    '../Core/oneTimeWarning',
-    '../Core/PrimitiveType',
-    '../Core/RuntimeError',
-    '../Core/Transforms',
-    '../Renderer/Buffer',
-    '../Renderer/BufferUsage',
-    '../Renderer/DrawCommand',
-    '../Renderer/Pass',
-    '../Renderer/RenderState',
-    '../Renderer/ShaderProgram',
-    '../Renderer/ShaderSource',
-    '../Renderer/VertexArray',
-    '../ThirdParty/when',
-    './BlendingState',
-    './Cesium3DTileBatchTable',
-    './Cesium3DTileFeature',
-    './Cesium3DTileFeatureTable',
-    './SceneMode',
-    './ShadowMode'
-], function(
-    Cartesian2,
-    Cartesian3,
-    Cartesian4,
-    Color,
-    combine,
-    ComponentDatatype,
-    defaultValue,
-    defined,
-    defineProperties,
-    destroyObject,
-    DeveloperError,
-    FeatureDetection,
-    getStringFromTypedArray,
-    Matrix4,
-    oneTimeWarning,
-    PrimitiveType,
-    RuntimeError,
-    Transforms,
-    Buffer,
-    BufferUsage,
-    DrawCommand,
-    Pass,
-    RenderState,
-    ShaderProgram,
-    ShaderSource,
-    VertexArray,
-    when,
-    BlendingState,
-    Cesium3DTileBatchTable,
-    Cesium3DTileFeature,
-    Cesium3DTileFeatureTable,
-    SceneMode,
-    ShadowMode) {
+        '../Core/Cartesian2',
+        '../Core/Cartesian3',
+        '../Core/Cartesian4',
+        '../Core/Color',
+        '../Core/combine',
+        '../Core/ComponentDatatype',
+        '../Core/defaultValue',
+        '../Core/defined',
+        '../Core/defineProperties',
+        '../Core/destroyObject',
+        '../Core/DeveloperError',
+        '../Core/FeatureDetection',
+        '../Core/getStringFromTypedArray',
+        '../Core/Matrix3',
+        '../Core/Matrix4',
+        '../Core/oneTimeWarning',
+        '../Core/Plane',
+        '../Core/PrimitiveType',
+        '../Core/RuntimeError',
+        '../Core/Transforms',
+        '../Renderer/Buffer',
+        '../Renderer/BufferUsage',
+        '../Renderer/DrawCommand',
+        '../Renderer/Pass',
+        '../Renderer/RenderState',
+        '../Renderer/ShaderProgram',
+        '../Renderer/ShaderSource',
+        '../Renderer/VertexArray',
+        '../ThirdParty/when',
+        './BlendingState',
+        './Cesium3DTileBatchTable',
+        './Cesium3DTileFeature',
+        './Cesium3DTileFeatureTable',
+        './SceneMode',
+        './ShadowMode'
+    ], function(
+        Cartesian2,
+        Cartesian3,
+        Cartesian4,
+        Color,
+        combine,
+        ComponentDatatype,
+        defaultValue,
+        defined,
+        defineProperties,
+        destroyObject,
+        DeveloperError,
+        FeatureDetection,
+        getStringFromTypedArray,
+        Matrix3,
+        Matrix4,
+        oneTimeWarning,
+        Plane,
+        PrimitiveType,
+        RuntimeError,
+        Transforms,
+        Buffer,
+        BufferUsage,
+        DrawCommand,
+        Pass,
+        RenderState,
+        ShaderProgram,
+        ShaderSource,
+        VertexArray,
+        when,
+        BlendingState,
+        Cesium3DTileBatchTable,
+        Cesium3DTileFeature,
+        Cesium3DTileFeatureTable,
+        SceneMode,
+        ShadowMode) {
     'use strict';
 
     // Bail out if the browser doesn't support typed arrays, to prevent the setup function
@@ -113,6 +117,9 @@ define([
         this._hasNormals = false;
         this._hasBatchIds = false;
 
+        // Used to regenerate shader when clipping on this tile changes
+        this._isClipped = true;
+
         // Use per-point normals to hide back-facing points.
         this.backFaceCulling = false;
         this._backFaceCulling = false;
@@ -151,6 +158,9 @@ define([
         this._geometryByteLength = 0;
 
         this._features = undefined;
+
+        this._packedClippingPlanes = [];
+        this._modelViewMatrix = Matrix4.clone(Matrix4.IDENTITY);
 
         /**
          * @inheritdoc Cesium3DTileContent#featurePropertiesDirty
@@ -529,6 +539,7 @@ define([
             }
         }
 
+        var clippingPlanes = content._tileset.clippingPlanes;
         var uniformMap = {
             u_pointAttenuationMaxSizeAndSseDepthMultiplier : function() {
                 scratchPointAttenuationMaxSizeAndDepthMultiplier.x = content._pointAttenuationMaxSize;
@@ -546,6 +557,21 @@ define([
             },
             u_constantColor : function() {
                 return content._constantColor;
+            },
+            u_clippingPlanesLength : function() {
+                return content._packedClippingPlanes.length;
+            },
+            u_clippingPlanes : function() {
+                return content._packedClippingPlanes;
+            },
+            u_clippingPlanesEdgeStyle : function() {
+                if (!defined(clippingPlanes)) {
+                    return Color.WHITE.withAlpha(0.0);
+                }
+
+                var style = Color.clone(clippingPlanes.edgeColor);
+                style.alpha = clippingPlanes.edgeWidth;
+                return style;
             }
         };
 
@@ -813,6 +839,7 @@ define([
         var backFaceCulling = content._backFaceCulling;
         var pointAttenuation = content._pointAttenuation;
         var vertexArray = content._drawCommand.vertexArray;
+        var clippingPlanes = content._tileset.clippingPlanes;
 
         var colorStyleFunction;
         var showStyleFunction;
@@ -841,6 +868,7 @@ define([
         var hasColorStyle = defined(colorStyleFunction);
         var hasShowStyle = defined(showStyleFunction);
         var hasPointSizeStyle = defined(pointSizeStyleFunction);
+        var hasClippedContent = defined(clippingPlanes) && clippingPlanes.enabled && content._tile._isClipped;
 
         // Get the properties in use by the style
         var styleableProperties = [];
@@ -1069,11 +1097,31 @@ define([
 
         vs += '} \n';
 
-        var fs = 'varying vec4 v_color; \n' +
-                 'void main() \n' +
-                 '{ \n' +
-                 '    gl_FragColor = v_color; \n' +
-                 '} \n';
+        var fs = 'varying vec4 v_color; \n';
+
+        if (hasClippedContent) {
+            fs += 'uniform int u_clippingPlanesLength;' +
+                  'uniform vec4 u_clippingPlanes[czm_maxClippingPlanes]; \n' +
+                  'uniform vec4 u_clippingPlanesEdgeStyle; \n';
+        }
+
+        fs +=  'void main() \n' +
+               '{ \n' +
+               '    gl_FragColor = v_color; \n';
+
+        if (hasClippedContent) {
+            var clippingFunction = clippingPlanes.combineClippingRegions ? 'czm_discardIfClippedCombineRegions' : 'czm_discardIfClipped';
+            fs += '    float clipDistance = ' + clippingFunction + '(u_clippingPlanes, u_clippingPlanesLength); \n' +
+                  '    vec4 clippingPlanesEdgeColor = vec4(1.0); \n' +
+                  '    clippingPlanesEdgeColor.rgb = u_clippingPlanesEdgeStyle.rgb; \n' +
+                  '    float clippingPlanesEdgeWidth = u_clippingPlanesEdgeStyle.a; \n' +
+                  '    if (clipDistance > 0.0 && clipDistance < clippingPlanesEdgeWidth) \n' +
+                  '    { \n' +
+                  '        gl_FragColor = clippingPlanesEdgeColor; \n' +
+                  '    } \n';
+        }
+
+        fs += '} \n';
 
         var drawVS = vs;
         var drawFS = fs;
@@ -1206,6 +1254,25 @@ define([
 
         this._mode = frameState.mode;
 
+        var context = frameState.context;
+
+        // update clipping planes
+        var clippingPlanes = this._tileset.clippingPlanes;
+        var clippingEnabled = defined(clippingPlanes) && clippingPlanes.enabled && this._tile._isClipped;
+        var length = 0;
+        if (clippingEnabled) {
+            length = clippingPlanes.planes.length;
+            Matrix4.multiply(context.uniformState.view3D, modelMatrix, this._modelViewMatrix);
+        }
+
+        if (this._packedClippingPlanes.length !== length) {
+            this._packedClippingPlanes = new Array(length);
+
+            for (var i = 0; i < length; ++i) {
+                this._packedClippingPlanes[i] = new Cartesian4();
+            }
+        }
+
         if (!defined(this._drawCommand)) {
             createResources(this, frameState);
             createShaders(this, frameState, tileset.style);
@@ -1213,6 +1280,16 @@ define([
 
             this._readyPromise.resolve(this);
             this._parsedContent = undefined; // Unload
+        }
+
+        if (clippingEnabled) {
+            clippingPlanes.transformAndPackPlanes(this._modelViewMatrix, this._packedClippingPlanes);
+        }
+
+        var isClipped = this._tile._isClipped;
+        if (this._isClipped !== isClipped) {
+            this._isClipped = isClipped;
+            createShaders(this, frameState, tileset.style);
         }
 
         if (updateModelMatrix) {

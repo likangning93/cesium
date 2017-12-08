@@ -160,6 +160,8 @@ define([
 
         this._fogDensity = undefined;
 
+        this._invertClassificationColor = undefined;
+
         this._imagerySplitPosition = 0.0;
         this._pixelSizePerMeter = undefined;
         this._geometricToleranceOverMeter = undefined;
@@ -860,6 +862,18 @@ define([
             get : function() {
                 return this._minimumDisableDepthTestDistance;
             }
+        },
+
+        /**
+         * The highlight color of unclassified 3D Tiles.
+         *
+         * @memberof UniformState.prototype
+         * @type {Color}
+         */
+        invertClassificationColor : {
+            get : function() {
+                return this._invertClassificationColor;
+            }
         }
     });
 
@@ -1026,6 +1040,8 @@ define([
         this._environmentMap = defaultValue(frameState.environmentMap, frameState.context.defaultCubeMap);
 
         this._fogDensity = frameState.fog.density;
+
+        this._invertClassificationColor = frameState.invertClassificationColor;
 
         this._frameState = frameState;
         this._temeToPseudoFixed = Transforms.computeTemeToPseudoFixedMatrix(frameState.time, this._temeToPseudoFixed);
