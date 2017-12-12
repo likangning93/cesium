@@ -31,7 +31,7 @@ define([
         './Cesium3DTilesetTraversal',
         './Cesium3DTileStyleEngine',
         './LabelCollection',
-        './PointCloudPostProcessor',
+        './PointCloudPostProcessEdl',
         './SceneMode',
         './ShadowMode',
         './TileBoundingRegion',
@@ -521,7 +521,7 @@ define([
          * For point cloud tiles, whether to scale points as they get closer to the camera.
          *
          * @type {Boolean}
-         * @default true
+         * @default false
          */
         this.pointAttenuation = false;
 
@@ -532,6 +532,14 @@ define([
          * @default 10.0
          */
         this.pointAttenuationMaxSize = 10.0;
+
+        /**
+         * For simple attenuation, shade points using Eye Dome Lighting
+         *
+         * @type {Boolean}
+         * @default false
+         */
+        this.pointAttenuationEDL = false;
 
         /**
          * Determines whether siblings of visible tiles are always downloaded during traversal.

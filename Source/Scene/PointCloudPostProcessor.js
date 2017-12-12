@@ -882,7 +882,7 @@ define([
         if (processor.aoViewEnabled) {
             debugViewCommand = debugViewStage(processor, context, processor._aoTextures[0], true);
         } else if (processor.depthViewEnabled) {
-            debugViewCommand = debugViewStage(processor, context, processor._ecTextures[0], false);
+            debugViewCommand = debugViewStage(processor, context, processor._ecTextures[0], true);
         }
 
         var framebuffers = processor._framebuffers;
