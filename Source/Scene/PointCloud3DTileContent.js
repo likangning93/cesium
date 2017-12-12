@@ -139,11 +139,7 @@ define([
         var interpointDistance = tile.geometricError * 0.70710678118;
         if (tile.children.length === 0) // leaf
         {
-            var boundingSphereRadius = tile._boundingVolume._boundingSphere.radius;
-            var volumeApproximation = boundingSphereRadius * boundingSphereRadius * boundingSphereRadius;
-            var parentBoundingSphereRadius = tile.parent._boundingVolume._boundingSphere.radius;
-            var parentVolumeApproximation = parentBoundingSphereRadius * parentBoundingSphereRadius * parentBoundingSphereRadius;
-            interpointDistance = tile.parent.geometricError * (volumeApproximation / parentVolumeApproximation);
+            interpointDistance = tile.parent.geometricError * 0.5 * 0.70710678118;
         }
 
         this._interpointDistance = interpointDistance;
