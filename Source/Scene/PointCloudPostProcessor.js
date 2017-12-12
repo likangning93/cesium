@@ -1080,7 +1080,8 @@ define([
             }
 
             var derivedCommand = command.derivedCommands.pointCloudProcessor;
-            if (!defined(derivedCommand) || command.dirty || dirty) {
+            if (!defined(derivedCommand) || command.dirty || dirty ||
+                derivedCommand.framebuffer !== this._framebuffers.prior) { // Prevent crash when tiles out-of-view come in-view during context size change
                 derivedCommand = DrawCommand.shallowClone(command);
                 command.derivedCommands.pointCloudProcessor = derivedCommand;
 

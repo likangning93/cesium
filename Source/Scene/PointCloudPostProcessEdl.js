@@ -1,6 +1,7 @@
 /*global define*/
 define([
         '../Core/Cartesian2',
+        '../Core/Math',
         '../Core/clone',
         '../Core/Color',
         '../Core/combine',
@@ -34,6 +35,7 @@ define([
         '../Shaders/PostProcessFilters/PointCloudEyeDomeLighting'
     ], function(
         Cartesian2,
+        CesiumMath,
         clone,
         Color,
         combine,
@@ -68,51 +70,31 @@ define([
     ) {
     'use strict';
 
-     /**
+    /**
      * @private
      */
     function PointCloudPostProcessEdl() {
         this._framebuffers = undefined;
         this._colorTexture = undefined; // color gbuffer
         this._ecTexture = undefined; // depth gbuffer
-        this._stencilMaskTexture = undefined; // needed to write depth so camera based on depth works
+        this._depthTexture = undefined; // needed to write depth so camera based on depth works
         this._drawCommands = undefined;
         this._clearCommands = undefined;
 
         this.edlStrength = 1.0;
         this.radius = 1.0;
+    }
 
-        this._testingFunc = StencilFunction.EQUAL;
-        this._testingOp = {
-            fail : StencilOperation.KEEP,
-            zFail : StencilOperation.KEEP,
-            zPass : StencilOperation.KEEP
-        };
-        this._writeFunc = StencilFunction.ALWAYS;
-        this._writeOp = {
-            fail : StencilOperation.KEEP,
-            zFail : StencilOperation.KEEP,
-            zPass : StencilOperation.ZERO
-        };
-
-        this._positiveStencilTest = {
-            enabled : true,
-            reference : 0,
-            mask : 1,
-            frontFunction : this._testingFunc,
-            backFunction : this._testingFunc,
-            frontOperation : this._testingOp,
-            backOperation : this._testingOp
-        };
-        this._negativeStencilTest = {
-            enabled : true,
-            reference : 1,
-            mask : 1,
-            frontFunction : this._testingFunc,
-            backFunction : this._testingFunc,
-            frontOperation : this._testingOp,
-            backOperation : this._testingOp
-        };
+    function addConstants(sourceFS, constantName, value) {
+        var finalSource = sourceFS;
+        if (typeof(value) === 'boolean') {
+            if (value !== false) {
+                finalSource = '#define ' + constantName + '\n' + sourceFS;
+            }
+        } else {
+            finalSource = '#define ' + constantName + ' ' + value + '\n' + sourceFS;
+        }
+        return finalSource;
     }
 
     function createSampler() {
@@ -130,22 +112,22 @@ define([
             return;
         }
 
+
         processor._colorTexture.destroy();
         processor._ecTexture.destroy();
-        processor._sectorLUTTexture.destroy();
-        processor._stencilMaskTexture.destroy();
+        processor._depthTexture.destroy();
         for (var name in framebuffers) {
             if (framebuffers.hasOwnProperty(name)) {
                 framebuffers[name].destroy();
             }
         }
 
-        this._framebuffers = undefined;
-        this._colorTexture = undefined;
-        this._ecTexture = undefined;
-        this._stencilMaskTexture = undefined;
-        this._drawCommands = undefined;
-        this._clearCommands = undefined;
+        processor._framebuffers = undefined;
+        processor._colorTexture = undefined;
+        processor._ecTexture = undefined;
+        processor._depthTexture = undefined;
+        processor._drawCommands = undefined;
+        processor._clearCommands = undefined;
     }
 
     function createFramebuffers(processor, context) {
@@ -170,12 +152,12 @@ define([
             sampler : createSampler()
         });
 
-        var stencilMaskTexture = new Texture({
+        var depthTexture = new Texture({
             context : context,
             width : screenWidth,
             height : screenHeight,
-            pixelFormat : PixelFormat.DEPTH_STENCIL,
-            pixelDatatype : PixelDatatype.UNSIGNED_INT_24_8,
+            pixelFormat : PixelFormat.DEPTH_COMPONENT,
+            pixelDatatype : PixelDatatype.UNSIGNED_INT,
             sampler : createSampler()
         });
 
@@ -186,13 +168,13 @@ define([
                     colorTexture,
                     ecTexture
                 ],
-                depthStencilTexture : stencilMaskTexture,
+                depthTexture : depthTexture,
                 destroyAttachments : false
             })
         };
         processor._colorTexture = colorTexture;
         processor._ecTexture = ecTexture;
-        processor._stencilMaskTexture = stencilMaskTexture;
+        processor._depthTexture = depthTexture;
     }
 
     var edlStrengthAndRadiusScratch = new Cartesian2();
@@ -200,7 +182,10 @@ define([
     function createCommands(processor, context) {
         processor._drawCommands = {};
 
-        var blendFS = PointCloudEyeDomeLighting;
+        var blendFS = addConstants(PointCloudEyeDomeLighting, 'epsilon8', CesiumMath.EPSILON8);
+        var pickBlendFS = addConstants(blendFS, 'notPicking', false);
+        blendFS = addConstants(blendFS, 'notPicking', true);
+
         var blendUniformMap = {
             u_pointCloud_colorTexture : function() {
                 return processor._colorTexture;
@@ -230,6 +215,13 @@ define([
             owner : processor
         });
 
+        var pickBlendCommand = context.createViewportQuadCommand(pickBlendFS, {
+            uniformMap : blendUniformMap,
+            renderState : blendRenderState,
+            pass : Pass.CESIUM_3D_TILE,
+            owner : processor
+        });
+
         // set up clear commands for all frame buffers
         var framebuffers = processor._framebuffers;
         var clearCommands = {};
@@ -239,7 +231,6 @@ define([
                     framebuffer : framebuffers[name],
                     color : new Color(0.0, 0.0, 0.0, 0.0),
                     depth : 1.0,
-                    stencil : 0,
                     renderState : RenderState.fromCache(),
                     pass : Pass.CESIUM_3D_TILE,
                     owner : processor
@@ -248,6 +239,7 @@ define([
         }
 
         processor._drawCommands.blendCommand = blendCommand;
+        processor._drawCommands.pickBlendCommand = pickBlendCommand;
         processor._clearCommands = clearCommands;
     }
 
@@ -257,8 +249,8 @@ define([
         var colorTexture = processor._colorTexture;
         var nowDirty = false;
         var resized = defined(colorTexture) &&
-            ((colorTexture.width !== screenWidth) ||
-             (colorTexture.height !== screenHeight));
+                      ((colorTexture.width !== screenWidth) ||
+                       (colorTexture.height !== screenHeight));
 
         if (!defined(colorTexture) || resized || dirty) {
             destroyFramebuffers(processor);
@@ -339,7 +331,8 @@ define([
             }
 
             var derivedCommand = command.derivedCommands.pointCloudProcessor;
-            if (!defined(derivedCommand) || command.dirty || dirty) {
+            if (!defined(derivedCommand) || command.dirty || dirty ||
+                derivedCommand.framebuffer !== this._framebuffers.prior) { // Prevent crash when tiles out-of-view come in-view during context size change
                 derivedCommand = DrawCommand.shallowClone(command);
                 command.derivedCommands.pointCloudProcessor = derivedCommand;
 
@@ -361,6 +354,13 @@ define([
 
         var clearCommands = this._clearCommands;
         var blendCommand = this._drawCommands.blendCommand;
+
+        var passes = frameState.passes;
+        var isPick = (passes.pick && !passes.render);
+        if (isPick)
+        {
+            blendCommand = this._drawCommands.pickBlendCommand;
+        }
 
         // Blend EDL into the main FBO
         commandList.push(blendCommand);
