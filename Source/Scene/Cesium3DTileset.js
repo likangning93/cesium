@@ -32,6 +32,7 @@ define([
         './Cesium3DTileStyleEngine',
         './LabelCollection',
         './PointCloudPostProcessEdl',
+        './PointCloudPostProcessor',
         './SceneMode',
         './ShadowMode',
         './TileBoundingRegion',
@@ -70,6 +71,7 @@ define([
         Cesium3DTilesetTraversal,
         Cesium3DTileStyleEngine,
         LabelCollection,
+        PointCloudPostProcessEDL,
         PointCloudPostProcessor,
         SceneMode,
         ShadowMode,
@@ -726,6 +728,7 @@ define([
         };
 
         this._pointCloudPostProcessor = new PointCloudPostProcessor(this.pointCloudPostProcessorOptions);
+        this._pointCloudPostProcessEDL = new PointCloudPostProcessEDL();
 
         /**
          * This property is for debugging only; it is not optimized for production use.
@@ -1607,6 +1610,12 @@ define([
 
         if (tileset.pointCloudPostProcessorOptions.enabled && (addedCommandsLength > 0)) {
             tileset._pointCloudPostProcessor.update(frameState, numberOfInitialCommands, tileset);
+        }
+
+        // Only run EDL if simple attenuation is on and experimental attenuation is off
+        if (!tileset.pointCloudPostProcessorOptions.enabled && (addedCommandsLength > 0) &&
+             tileset.pointAttenuation && tileset.pointAttenuationEDL) {
+            tileset._pointCloudPostProcessEDL.update(frameState, numberOfInitialCommands, tileset);
         }
 
         if (tileset.debugShowGeometricError || tileset.debugShowRenderingStatistics || tileset.debugShowMemoryUsage || tileset.debugShowUrl) {
