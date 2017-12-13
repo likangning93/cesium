@@ -76,7 +76,7 @@ define([
     function PointCloudPostProcessEdl() {
         this._framebuffers = undefined;
         this._colorTexture = undefined; // color gbuffer
-        this._ecTexture = undefined; // depth gbuffer
+        this._ecAndLogDepthTexture = undefined; // depth gbuffer
         this._depthTexture = undefined; // needed to write depth so camera based on depth works
         this._drawCommands = undefined;
         this._clearCommands = undefined;
@@ -114,7 +114,7 @@ define([
 
 
         processor._colorTexture.destroy();
-        processor._ecTexture.destroy();
+        processor._ecAndLogDepthTexture.destroy();
         processor._depthTexture.destroy();
         for (var name in framebuffers) {
             if (framebuffers.hasOwnProperty(name)) {
@@ -124,7 +124,7 @@ define([
 
         processor._framebuffers = undefined;
         processor._colorTexture = undefined;
-        processor._ecTexture = undefined;
+        processor._ecAndLogDepthTexture = undefined;
         processor._depthTexture = undefined;
         processor._drawCommands = undefined;
         processor._clearCommands = undefined;
@@ -173,7 +173,7 @@ define([
             })
         };
         processor._colorTexture = colorTexture;
-        processor._ecTexture = ecTexture;
+        processor._ecAndLogDepthTexture = ecTexture;
         processor._depthTexture = depthTexture;
     }
 
@@ -190,8 +190,8 @@ define([
             u_pointCloud_colorTexture : function() {
                 return processor._colorTexture;
             },
-            u_pointCloud_ecTexture : function() {
-                return processor._ecTexture;
+            u_pointCloud_ecAndLogDepthTexture : function() {
+                return processor._ecAndLogDepthTexture;
             },
             u_edlStrengthAndDistance : function() {
                 edlStrengthAndRadiusScratch.x = processor.edlStrength;

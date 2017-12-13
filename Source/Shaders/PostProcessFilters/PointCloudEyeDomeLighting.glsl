@@ -1,18 +1,24 @@
 #extension GL_EXT_frag_depth : enable
 
 uniform sampler2D u_pointCloud_colorTexture;
-uniform sampler2D u_pointCloud_ecTexture; // TODO: document that log2 depth is in alpha
+uniform sampler2D u_pointCloud_ecAndLogDepthTexture;
 uniform vec2 u_edlStrengthAndDistance;
 varying vec2 v_textureCoordinates;
 
-float neighborContribution(float log2Depth, vec2 texcoord)
+vec2 neighborContribution(float log2Depth, vec2 padding)
 {
-    return max(0.0, log2Depth - texture2D(u_pointCloud_ecTexture, texcoord).a);
+    vec2 depthAndLog2Depth = texture2D(u_pointCloud_ecAndLogDepthTexture, v_textureCoordinates + padding).zw;
+    if (depthAndLog2Depth.x == 0.0) // 0.0 is the clear value for the gbuffer
+    {
+        return vec2(0.0, 0.0); // throw out this sample
+    } else {
+        return vec2(max(0.0, log2Depth - depthAndLog2Depth.y), 1.0);
+    }
 }
 
 void main()
 {
-    vec4 ecAlphaDepth = texture2D(u_pointCloud_ecTexture, v_textureCoordinates);
+    vec4 ecAlphaDepth = texture2D(u_pointCloud_ecAndLogDepthTexture, v_textureCoordinates);
     if (length(ecAlphaDepth.xyz) < epsilon8)
     {
         discard;
@@ -20,37 +26,23 @@ void main()
     else
     {
         vec4 color = texture2D(u_pointCloud_colorTexture, v_textureCoordinates);
-#ifdef notPicking
-        float log2Depth = ecAlphaDepth.a;
+#ifdef notPicking // OK to modify color
 
         // sample from neighbors up, down, left, right
-        float edlStrength = u_edlStrengthAndDistance.x;
-        float edlDistance = u_edlStrengthAndDistance.y;
-        float padx = (1.0 / czm_viewport.z) * edlDistance;
-        float pady = (1.0 / czm_viewport.w) * edlDistance;
+        float padx = (1.0 / czm_viewport.z) * u_edlStrengthAndDistance.y;
+        float pady = (1.0 / czm_viewport.w) * u_edlStrengthAndDistance.y;
 
-        float response = 0.0;
+        vec2 responseAndCount = vec2(0.0, 0.0);
 
-        response += neighborContribution(log2Depth, v_textureCoordinates + vec2(0, pady));
-        response += neighborContribution(log2Depth, v_textureCoordinates - vec2(0, pady));
+        responseAndCount += neighborContribution(ecAlphaDepth.a, vec2(0, pady));
+        responseAndCount += neighborContribution(ecAlphaDepth.a, vec2(padx, 0));
+        responseAndCount += neighborContribution(ecAlphaDepth.a, vec2(0, -pady));
+        responseAndCount += neighborContribution(ecAlphaDepth.a, vec2(-padx, 0));
 
-        response += neighborContribution(log2Depth, v_textureCoordinates + vec2(padx, 0));
-        response += neighborContribution(log2Depth, v_textureCoordinates - vec2(padx, 0));
-        response /= 4.0;
-
-        float shade = exp(-response * 300.0 * edlStrength);
+        float response = responseAndCount.x / responseAndCount.y;
+        float shade = exp(-response * 300.0 * u_edlStrengthAndDistance.x);
         color.rgb *= shade;
-
-    /*
-        if (czm_equalsEpsilon(czm_currentFrustum.x, -ecAlphaDepth.z, 5.0)) {
-            color = vec4(1.0, 0.0, 0.0, color.a);
-        }
-
-        if (czm_equalsEpsilon(czm_currentFrustum.y, -ecAlphaDepth.z, 5.0)) {
-            color = vec4(0.0, 0.0, 1.0, color.a);
-        }*/
 #endif
-
         gl_FragColor = vec4(color);
         gl_FragDepthEXT = czm_eyeToWindowCoordinates(vec4(ecAlphaDepth.xyz, 1.0)).z;
     }
