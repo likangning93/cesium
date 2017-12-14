@@ -8,6 +8,7 @@ define([
         '../Core/ComponentDatatype',
         '../Core/defined',
         '../Core/destroyObject',
+        '../Core/FeatureDetection',
         '../Core/Geometry',
         '../Core/GeometryAttribute',
         '../Core/PixelFormat',
@@ -42,6 +43,7 @@ define([
         ComponentDatatype,
         defined,
         destroyObject,
+        FeatureDetection,
         Geometry,
         GeometryAttribute,
         PixelFormat,
@@ -139,7 +141,8 @@ define([
             width : screenWidth,
             height : screenHeight,
             pixelFormat : PixelFormat.RGBA,
-            pixelDatatype : PixelDatatype.UNSIGNED_BYTE,
+            // Firefox throws FRAMEBUFFER_UNSUPPORTED 0x8CDD if this doesn't match what's in ecTexture
+            pixelDatatype : FeatureDetection.isFirefox() ? PixelDatatype.FLOAT : PixelDatatype.UNSIGNED_BYTE,
             sampler : createSampler()
         });
 
