@@ -40,6 +40,9 @@ define([
         this._passState = passState;
         this._width = 0;
         this._height = 0;
+
+        this._pickCache = undefined;
+        this.cacheDirty = true;
     }
     PickFramebuffer.prototype.begin = function(screenSpaceRectangle) {
         var context = this._context;
@@ -77,26 +80,66 @@ define([
 
     var colorScratch = new Color();
 
-    PickFramebuffer.prototype.end = function(screenSpaceRectangle) {
+    PickFramebuffer.prototype.end = function(screenSpaceRectangle, useCache) {
         var width = defaultValue(screenSpaceRectangle.width, 1.0);
         var height = defaultValue(screenSpaceRectangle.height, 1.0);
 
         var context = this._context;
-        var pixels = context.readPixels({
-            x : screenSpaceRectangle.x,
-            y : screenSpaceRectangle.y,
-            width : width,
-            height : height,
-            framebuffer : this._fb
-        });
+        var pixels;
+        var index;
+        var x, y;
+
+        if (useCache) {
+            var contextWidth = context.drawingBufferWidth;
+            var contextHeight = context.drawingBufferHeight;
+            var allPixels = this._pickCache;
+            if (this.cacheDirty) {
+                allPixels = context.readPixels({
+                        x : 0,
+                        y : 0,
+                        width : contextWidth,
+                        height : contextHeight,
+                        framebuffer : this._fb
+                    },
+                    this._pickCache);
+                this._pickCache = allPixels;
+                this.cacheDirty = false;
+            }
+            pixels = new Uint8Array(4 * width * height);
+            var localX = 0;
+            var localY = 0;
+            for (y = screenSpaceRectangle.y; y < screenSpaceRectangle.y + height; y++) {
+                localX = 0;
+                for (x = screenSpaceRectangle.x; x < screenSpaceRectangle.x + width; x++) {
+                    index = (y * contextWidth + x) * 4;
+                    var localIndex = (localY * width + localX) * 4;
+                    localX++;
+                    pixels[localIndex] = allPixels[index];
+                    pixels[localIndex + 1] = allPixels[index + 1];
+                    pixels[localIndex + 2] = allPixels[index + 2];
+                    pixels[localIndex + 3] = allPixels[index + 3];
+                }
+                localY++;
+            }
+        } else {
+            pixels = context.readPixels({
+                    x : screenSpaceRectangle.x,
+                    y : screenSpaceRectangle.y,
+                    width : width,
+                    height : height,
+                    framebuffer : this._fb
+                },
+                this._pickCache);
+            this._pickCache = pixels;
+        }
 
         var max = Math.max(width, height);
         var length = max * max;
         var halfWidth = Math.floor(width * 0.5);
         var halfHeight = Math.floor(height * 0.5);
 
-        var x = 0;
-        var y = 0;
+        x = 0;
+        y = 0;
         var dx = 0;
         var dy = -1;
 
@@ -107,7 +150,7 @@ define([
         // loop iterations would be wasted. Prefer square regions where the size is odd.
         for (var i = 0; i < length; ++i) {
             if (-halfWidth <= x && x <= halfWidth && -halfHeight <= y && y <= halfHeight) {
-                var index = 4 * ((halfHeight - y) * width + x + halfWidth);
+                index = 4 * ((halfHeight - y) * width + x + halfWidth);
 
                 colorScratch.red = Color.byteToFloat(pixels[index]);
                 colorScratch.green = Color.byteToFloat(pixels[index + 1]);

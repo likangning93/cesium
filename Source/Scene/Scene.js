@@ -586,6 +586,10 @@ define([
          */
         this.useDepthPicking = true;
 
+        this._cacheCameraViewMatrix = new Matrix4();
+        this._cacheDrawDimensions = new Cartesian2();
+        this._cachedPackedDepths = new Array(3);
+
         /**
          * When <code>true</code>, enables picking translucent geometry using the depth buffer.
          * {@link Scene#useDepthPicking} must also be true to enable picking the depth buffer.
@@ -1238,6 +1242,28 @@ define([
             }
         }
     });
+
+    Scene.prototype.cachedViewDirty = function() {
+        var context = this._context;
+        var cacheDrawDimensions = this._cacheDrawDimensions;
+        var cacheCameraViewMatrix = this._cacheCameraViewMatrix;
+        var cameraViewMatrix = this._camera.viewMatrix;
+
+        return !Matrix4.equalsEpsilon(cacheCameraViewMatrix, cameraViewMatrix, CesiumMath.EPSILON7) ||
+               cacheDrawDimensions.x !== context.drawingBufferWidth ||
+               cacheDrawDimensions.y !== context.drawingBufferHeight;
+    };
+
+    Scene.prototype.updatedCachedView = function() {
+        var context = this._context;
+        var cacheDrawDimensions = this._cacheDrawDimensions;
+        var cacheCameraViewMatrix = this._cacheCameraViewMatrix;
+        var cameraViewMatrix = this._camera.viewMatrix;
+
+        Matrix4.clone(cameraViewMatrix, cacheCameraViewMatrix);
+        cacheDrawDimensions.x = context.drawingBufferWidth;
+        cacheDrawDimensions.y = context.drawingBufferHeight;
+    };
 
     /**
      * Determines if a compressed texture format is supported.
@@ -2967,7 +2993,7 @@ define([
         return getPickPerspectiveCullingVolume(scene, drawingBufferPosition, width, height);
     }
 
-    // pick rectangle width and height, assumed odd
+// pick rectangle width and height, assumed odd
     var rectangleWidth = 3.0;
     var rectangleHeight = 3.0;
     var scratchRectangle = new BoundingRectangle(0.0, 0.0, rectangleWidth, rectangleHeight);
@@ -2998,7 +3024,7 @@ define([
      *
      * @exception {DeveloperError} windowPosition is undefined.
      */
-    Scene.prototype.pick = function(windowPosition, width, height) {
+    Scene.prototype.pick = function(windowPosition, width, height, hover) {
         //>>includeStart('debug', pragmas.debug);
         if(!defined(windowPosition)) {
             throw new DeveloperError('windowPosition is undefined.');
@@ -3022,23 +3048,51 @@ define([
 
         // Update with previous frame's number and time, assuming that render is called before picking.
         updateFrameState(this, frameState.frameNumber, frameState.time);
-        frameState.cullingVolume = getPickCullingVolume(this, drawingBufferPosition, rectangleWidth, rectangleHeight);
         frameState.invertClassification = false;
         frameState.passes.pick = true;
+        var object, passState;
 
-        us.update(frameState);
+        if (hover) {
+            us.update(frameState);
 
-        scratchRectangle.x = drawingBufferPosition.x - ((rectangleWidth - 1.0) * 0.5);
-        scratchRectangle.y = (this.drawingBufferHeight - drawingBufferPosition.y) - ((rectangleHeight - 1.0) * 0.5);
-        scratchRectangle.width = rectangleWidth;
-        scratchRectangle.height = rectangleHeight;
-        var passState = this._pickFramebuffer.begin(scratchRectangle);
+            // Want to draw the entire scene IFF the view changed since the last hover pick
+            scratchRectangle.x = 0.0;
+            scratchRectangle.y = 0.0;
+            scratchRectangle.width = context.drawingBufferWidth;
+            scratchRectangle.height = context.drawingBufferHeight;
+            passState = this._pickFramebuffer.begin(scratchRectangle);
+            var cachedViewDirty = this.cachedViewDirty();
+            if (cachedViewDirty)
+            {
+                updateEnvironment(this, passState);
+                updateAndExecuteCommands(this, passState, scratchColorZero);
+                resolveFramebuffers(this, passState);
+                this._pickFramebuffer.cacheDirty = true;
+            }
 
-        updateEnvironment(this, passState);
-        updateAndExecuteCommands(this, passState, scratchColorZero);
-        resolveFramebuffers(this, passState);
+            // make the rectangle smaller for actual pixel readback
+            scratchRectangle.x = drawingBufferPosition.x - ((rectangleWidth - 1.0) * 0.5);
+            scratchRectangle.y = (this.drawingBufferHeight - drawingBufferPosition.y) - ((rectangleHeight - 1.0) * 0.5);
+            scratchRectangle.width = rectangleWidth;
+            scratchRectangle.height = rectangleHeight;
 
-        var object = this._pickFramebuffer.end(scratchRectangle);
+            object = this._pickFramebuffer.end(scratchRectangle, true);
+        } else {
+            frameState.cullingVolume = getPickCullingVolume(this, drawingBufferPosition, rectangleWidth, rectangleHeight);
+            us.update(frameState);
+
+            scratchRectangle.x = drawingBufferPosition.x - ((rectangleWidth - 1.0) * 0.5);
+            scratchRectangle.y = (this.drawingBufferHeight - drawingBufferPosition.y) - ((rectangleHeight - 1.0) * 0.5);
+            scratchRectangle.width = rectangleWidth;
+            scratchRectangle.height = rectangleHeight;
+            passState = this._pickFramebuffer.begin(scratchRectangle);
+
+            updateEnvironment(this, passState);
+            updateAndExecuteCommands(this, passState, scratchColorZero);
+            resolveFramebuffers(this, passState);
+
+            object = this._pickFramebuffer.end(scratchRectangle);
+        }
         context.endFrame();
         callAfterRenderFunctions(frameState);
         return object;
@@ -3208,7 +3262,7 @@ define([
      *
      * @exception {DeveloperError} Picking from the depth buffer is not supported. Check pickPositionSupported.
      */
-    Scene.prototype.pickPositionWorldCoordinates = function(windowPosition, result) {
+    Scene.prototype.pickPositionWorldCoordinates = function(windowPosition, result, hover) {
         if (!this.useDepthPicking) {
             return undefined;
         }
@@ -3254,16 +3308,36 @@ define([
             frustum = camera.frustum.clone(scratchOrthographicOffCenterFrustum);
         }
 
+        var cachedViewDirty = this.cachedViewDirty();
         var numFrustums = this.numberOfFrustums;
         for (var i = 0; i < numFrustums; ++i) {
             var pickDepth = getPickDepth(this, i);
-            var pixels = context.readPixels({
-                x : drawingBufferPosition.x,
-                y : drawingBufferPosition.y,
-                width : 1,
-                height : 1,
-                framebuffer : pickDepth.framebuffer
-            });
+            var pixels;
+            if (hover) {
+                var packedDepths = this._cachedPackedDepths[i];
+                var contextWidth = context.drawingBufferWidth;
+                if (cachedViewDirty || !defined(packedDepths)) {
+                    packedDepths = context.readPixels({
+                        x : 0,
+                        y : 0,
+                        width : contextWidth,
+                        height : context.drawingBufferHeight,
+                        framebuffer : pickDepth.framebuffer
+                    }, packedDepths);
+                    this._cachedPackedDepths[i] = packedDepths;
+                }
+                var index = (drawingBufferPosition.x + drawingBufferPosition.y * contextWidth) * 4;
+                pixels = packedDepths.slice(index, index + 4);
+            }
+            else {
+                pixels = context.readPixels({
+                    x : drawingBufferPosition.x,
+                    y : drawingBufferPosition.y,
+                    width : 1,
+                    height : 1,
+                    framebuffer : pickDepth.framebuffer
+                });
+            }
 
             var packedDepth = Cartesian4.unpack(pixels, 0, scratchPackedDepth);
             Cartesian4.divideByScalar(packedDepth, 255.0, packedDepth);
@@ -3321,8 +3395,8 @@ define([
      *
      * @exception {DeveloperError} Picking from the depth buffer is not supported. Check pickPositionSupported.
      */
-    Scene.prototype.pickPosition = function(windowPosition, result) {
-        result = this.pickPositionWorldCoordinates(windowPosition, result);
+    Scene.prototype.pickPosition = function(windowPosition, result, hover) {
+        result = this.pickPositionWorldCoordinates(windowPosition, result, hover);
         if (defined(result) && this.mode !== SceneMode.SCENE3D) {
             Cartesian3.fromElements(result.y, result.z, result.x, result);
 
@@ -3559,8 +3633,8 @@ define([
      * var position = Cesium.Cartesian3.fromDegrees(0.0, 0.0);
      * var handler = new Cesium.ScreenSpaceEventHandler(scene.canvas);
      * handler.setInputAction(function(movement) {
-     *     console.log(scene.cartesianToCanvasCoordinates(position));
-     * }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+ *     console.log(scene.cartesianToCanvasCoordinates(position));
+ * }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
      */
     Scene.prototype.cartesianToCanvasCoordinates = function(position, result) {
         return SceneTransforms.wgs84ToWindowCoordinates(this, position, result);

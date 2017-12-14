@@ -1023,7 +1023,7 @@ define([
         }
     };
 
-    Context.prototype.readPixels = function(readState) {
+    Context.prototype.readPixels = function(readState, pixelBuffer) {
         var gl = this._gl;
 
         readState = readState || {};
@@ -1038,7 +1038,11 @@ define([
         Check.typeOf.number.greaterThan('readState.height', height, 0);
         //>>includeEnd('debug');
 
-        var pixels = new Uint8Array(4 * width * height);
+        var pixels = pixelBuffer;
+        if (!defined(pixelBuffer) || pixelBuffer.length < 4 * width * height)
+        {
+            pixels = new Uint8Array(4 * width * height);
+        }
 
         bindFramebuffer(this, framebuffer);
 

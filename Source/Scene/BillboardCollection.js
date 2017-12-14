@@ -1487,7 +1487,7 @@ define([
                         enabled : true,
                         func : (useTranslucentDepthMask ? WebGLConstants.LEQUAL : WebGLConstants.LESS)
                     },
-                    depthMask : useTranslucentDepthMask,
+                    depthMask : false, // temp fix to prevent billboards writing to depth
                     blending : BlendingState.ALPHA_BLEND
                 });
             } else {
