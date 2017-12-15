@@ -589,6 +589,7 @@ define([
         this._cacheCameraViewMatrix = new Matrix4();
         this._cacheDrawDimensions = new Cartesian2();
         this._cachedPackedDepths = new Array(3);
+        this.cacheForceUpdate = false;
 
         /**
          * When <code>true</code>, enables picking translucent geometry using the depth buffer.
@@ -3062,7 +3063,7 @@ define([
             scratchRectangle.height = context.drawingBufferHeight;
             passState = this._pickFramebuffer.begin(scratchRectangle);
             var cachedViewDirty = this.cachedViewDirty();
-            if (cachedViewDirty)
+            if (cachedViewDirty || this.cacheForceUpdate)
             {
                 updateEnvironment(this, passState);
                 updateAndExecuteCommands(this, passState, scratchColorZero);
@@ -3316,7 +3317,7 @@ define([
             if (hover) {
                 var packedDepths = this._cachedPackedDepths[i];
                 var contextWidth = context.drawingBufferWidth;
-                if (cachedViewDirty || !defined(packedDepths)) {
+                if (cachedViewDirty || !defined(packedDepths) || this.cacheForceUpdate) {
                     packedDepths = context.readPixels({
                         x : 0,
                         y : 0,
