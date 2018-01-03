@@ -13,6 +13,7 @@ define([
         '../Core/destroyObject',
         '../Core/DeveloperError',
         '../Core/Event',
+        '../Core/FeatureDetection',
         '../Core/GeometryInstance',
         '../Core/GeometryPipeline',
         '../Core/IndexDatatype',
@@ -59,6 +60,7 @@ define([
         destroyObject,
         DeveloperError,
         Event,
+        FeatureDetection,
         GeometryInstance,
         GeometryPipeline,
         IndexDatatype,
@@ -514,7 +516,7 @@ define([
             var planeIntersection = clippingPlanes.computeIntersectionWithBoundingVolume(boundingVolume);
             tile.isClipped = (planeIntersection !== Intersect.INSIDE);
             if (planeIntersection === Intersect.OUTSIDE) {
-                return Intersect.OUTSIDE;
+                return Visibility.NONE;
             }
         }
 
@@ -1301,32 +1303,33 @@ define([
             var length = 0;
 
             if (defined(clippingPlanes) && tile.isClipped) {
-                length = clippingPlanes.planes.length;
+                length = clippingPlanes.length;
             }
 
-            var clippingPlanesProperty = uniformMapProperties.clippingPlanes;
-            if (length !== clippingPlanesProperty.length) {
-                clippingPlanesProperty = uniformMapProperties.clippingPlanes = new Array(length);
+            var packedPlanes = uniformMapProperties.clippingPlanes;
+            var packedLength = packedPlanes.length;
+            if (packedLength !== length) {
+                packedPlanes.length = length;
 
-                for (var i = 0; i < length; ++i) {
-                    clippingPlanesProperty[i] = new Cartesian4();
+                for (var i = packedLength; i < length; ++i) {
+                    packedPlanes[i] = new Cartesian4();
                 }
             }
 
             if (defined(clippingPlanes) && clippingPlanes.enabled && tile.isClipped) {
-                clippingPlanes.transformAndPackPlanes(context.uniformState.view, clippingPlanesProperty);
+                clippingPlanes.transformAndPackPlanes(context.uniformState.view, packedPlanes);
                 uniformMapProperties.clippingPlanesEdgeColor = Color.clone(clippingPlanes.edgeColor, uniformMapProperties.clippingPlanesEdgeColor);
                 uniformMapProperties.clippingPlanesEdgeWidth = clippingPlanes.edgeWidth;
             }
 
-            var clippingPlanesEnabled = defined(clippingPlanes) && clippingPlanes.enabled && (uniformMapProperties.clippingPlanes.length > 0);
-            var combineClippingRegions = clippingPlanesEnabled ? clippingPlanes.combineClippingRegions : true;
+            var clippingPlanesEnabled = defined(clippingPlanes) && clippingPlanes.enabled && (uniformMapProperties.clippingPlanes.length > 0) && !FeatureDetection.isInternetExplorer();
+            var unionClippingRegions = clippingPlanesEnabled ? clippingPlanes.unionClippingRegions : false;
 
             if (defined(tileProvider.uniformMap)) {
                 uniformMap = combine(uniformMap, tileProvider.uniformMap);
             }
 
-            command.shaderProgram = tileProvider._surfaceShaderSet.getShaderProgram(frameState, surfaceTile, numberOfDayTextures, applyBrightness, applyContrast, applyHue, applySaturation, applyGamma, applyAlpha, applySplit, showReflectiveOcean, showOceanWaves, tileProvider.enableLighting, hasVertexNormals, useWebMercatorProjection, applyFog, clippingPlanesEnabled, combineClippingRegions);
+            command.shaderProgram = tileProvider._surfaceShaderSet.getShaderProgram(frameState, surfaceTile, numberOfDayTextures, applyBrightness, applyContrast, applyHue, applySaturation, applyGamma, applyAlpha, applySplit, showReflectiveOcean, showOceanWaves, tileProvider.enableLighting, hasVertexNormals, useWebMercatorProjection, applyFog, clippingPlanesEnabled, unionClippingRegions);
             command.castShadows = castShadows;
             command.receiveShadows = receiveShadows;
             command.renderState = renderState;

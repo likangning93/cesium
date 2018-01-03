@@ -2,6 +2,7 @@ defineSuite([
         'Scene/GlobeSurfaceTileProvider',
         'Core/Cartesian3',
         'Core/CesiumTerrainProvider',
+        'Core/ClippingPlaneCollection',
         'Core/Color',
         'Core/Credit',
         'Core/defined',
@@ -15,7 +16,6 @@ defineSuite([
         'Renderer/ContextLimits',
         'Renderer/RenderState',
         'Scene/BlendingState',
-        'Scene/ClippingPlaneCollection',
         'Scene/Fog',
         'Scene/Globe',
         'Scene/GlobeSurfaceShaderSet',
@@ -32,6 +32,7 @@ defineSuite([
         GlobeSurfaceTileProvider,
         Cartesian3,
         CesiumTerrainProvider,
+        ClippingPlaneCollection,
         Color,
         Credit,
         defined,
@@ -45,7 +46,6 @@ defineSuite([
         ContextLimits,
         RenderState,
         BlendingState,
-        ClippingPlaneCollection,
         Fog,
         Globe,
         GlobeSurfaceShaderSet,
@@ -714,7 +714,7 @@ defineSuite([
                 expect(rgba).not.toEqual([0, 0, 0, 255]);
             });
 
-            var clipPlane = new Plane(Cartesian3.UNIT_Z, 10000.0);
+            var clipPlane = new Plane(Cartesian3.UNIT_Z, -10000.0);
             scene.globe.clippingPlanes = new ClippingPlaneCollection ({
                 planes : [
                     clipPlane
@@ -745,7 +745,7 @@ defineSuite([
                 expect(rgba).not.toEqual([0, 0, 0, 255]);
             });
 
-            var clipPlane = new Plane(Cartesian3.UNIT_Z, 1000.0);
+            var clipPlane = new Plane(Cartesian3.UNIT_Z, -1000.0);
             scene.globe.clippingPlanes = new ClippingPlaneCollection ({
                 planes : [
                     clipPlane
@@ -764,7 +764,7 @@ defineSuite([
         });
     });
 
-    it('renders with multiple clipping planes and combined regions', function() {
+    it('renders with multiple clipping planes clipping regions according to the value of unionClippingPlane', function() {
         expect(scene).toRender([0, 0, 0, 255]);
 
         switchViewMode(SceneMode.SCENE3D, new GeographicProjection(Ellipsoid.WGS84));
@@ -780,15 +780,15 @@ defineSuite([
 
             scene.globe.clippingPlanes = new ClippingPlaneCollection ({
                 planes : [
-                    new Plane(Cartesian3.UNIT_Z, 10000.0),
-                    new Plane(Cartesian3.UNIT_X, 1000.0)
+                    new Plane(Cartesian3.UNIT_Z, -10000.0),
+                    new Plane(Cartesian3.UNIT_X, -1000.0)
                 ],
-                combineClippingRegions: false
+                unionClippingRegions: true
             });
 
             expect(scene).notToRender(result);
 
-            scene.globe.clippingPlanes.combineClippingRegions = true;
+            scene.globe.clippingPlanes.unionClippingRegions = false;
 
             expect(scene).toRender(result);
 
@@ -809,7 +809,7 @@ defineSuite([
         var globe = scene.globe;
         globe.clippingPlanes = new ClippingPlaneCollection ({
             planes : [
-                new Plane(Cartesian3.UNIT_Z, 1000000.0)
+                new Plane(Cartesian3.UNIT_Z, -1000000.0)
             ]
         });
 
@@ -845,7 +845,7 @@ defineSuite([
         var globe = scene.globe;
         globe.clippingPlanes = new ClippingPlaneCollection ({
             planes : [
-                new Plane(Cartesian3.UNIT_Z, -10000000.0)
+                new Plane(Cartesian3.UNIT_Z, 10000000.0)
             ]
         });
 

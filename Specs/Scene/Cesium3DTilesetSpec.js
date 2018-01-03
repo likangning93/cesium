@@ -1,6 +1,7 @@
 defineSuite([
         'Scene/Cesium3DTileset',
         'Core/Cartesian3',
+        'Core/ClippingPlaneCollection',
         'Core/Color',
         'Core/CullingVolume',
         'Core/getStringFromTypedArray',
@@ -21,7 +22,6 @@ defineSuite([
         'Scene/Cesium3DTileContentState',
         'Scene/Cesium3DTileRefine',
         'Scene/Cesium3DTileStyle',
-        'Scene/ClippingPlaneCollection',
         'Scene/CullFace',
         'Specs/Cesium3DTilesTester',
         'Specs/createScene',
@@ -30,6 +30,7 @@ defineSuite([
     ], function(
         Cesium3DTileset,
         Cartesian3,
+        ClippingPlaneCollection,
         Color,
         CullingVolume,
         getStringFromTypedArray,
@@ -50,7 +51,6 @@ defineSuite([
         Cesium3DTileContentState,
         Cesium3DTileRefine,
         Cesium3DTileStyle,
-        ClippingPlaneCollection,
         CullFace,
         Cesium3DTilesTester,
         createScene,
@@ -2815,7 +2815,7 @@ defineSuite([
 
             expect(visibility).not.toBe(CullingVolume.MASK_OUTSIDE);
 
-            var plane = new Plane(Cartesian3.UNIT_Z, 100000000.0);
+            var plane = new Plane(Cartesian3.UNIT_Z, -100000000.0);
             tileset.clippingPlanes = new ClippingPlaneCollection({
                 planes : [
                     plane
@@ -2839,7 +2839,7 @@ defineSuite([
 
             expect(visibility).not.toBe(Intersect.OUTSIDE);
 
-            var plane = new Plane(Cartesian3.UNIT_Z, 100000000.0);
+            var plane = new Plane(Cartesian3.UNIT_Z, -100000000.0);
             tileset.clippingPlanes = new ClippingPlaneCollection({
                 planes : [
                     plane
@@ -2881,7 +2881,7 @@ defineSuite([
             expect(statistics.numberOfCommands).toEqual(5);
             expect(root._isClipped).toBe(false);
 
-            plane.distance = 4081630.311150717; // center
+            plane.distance = -4081630.311150717; // center
 
             tileset.update(scene.frameState);
             scene.renderForSpecs();
@@ -2889,7 +2889,7 @@ defineSuite([
             expect(statistics.numberOfCommands).toEqual(3);
             expect(root._isClipped).toBe(true);
 
-            plane.distance = 4081630.31115071 + 287.0736139905632; // center + radius
+            plane.distance = -4081630.31115071 - 287.0736139905632; // center + radius
 
             tileset.update(scene.frameState);
             scene.renderForSpecs();
@@ -2923,7 +2923,7 @@ defineSuite([
             expect(statistics.numberOfCommands).toEqual(6);
             expect(root._isClipped).toBe(false);
 
-            plane.distance = 4081608.4377916814; // center
+            plane.distance = -4081608.4377916814; // center
 
             tileset.update(scene.frameState);
             scene.renderForSpecs();
@@ -2931,7 +2931,7 @@ defineSuite([
             expect(statistics.numberOfCommands).toEqual(6);
             expect(root._isClipped).toBe(true);
 
-            plane.distance = 4081608.4377916814 + 142.19001637409772; // center + radius
+            plane.distance = -4081608.4377916814 - 142.19001637409772; // center + radius
 
             tileset.update(scene.frameState);
             scene.renderForSpecs();
