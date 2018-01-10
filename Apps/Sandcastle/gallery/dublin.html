@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no">
+    <meta name="description" content="Point Cloud Attenuation and Eye Dome Lighting example.">
+    <meta name="cesium-sandcastle-labels" content="3D Tiles">
+    <title>Cesium Demo</title>
+    <script type="text/javascript" src="../Sandcastle-header.js"></script>
+    <script type="text/javascript" src="../../../ThirdParty/requirejs-2.1.20/require.js"></script>
+    <script type="text/javascript">
+        if(typeof require === "function") {
+            require.config({
+                baseUrl : '../../../Source',
+                waitSeconds : 120
+            });
+        }
+    </script>
+</head>
+<body class="sandcastle-loading" data-sandcastle-bucket="bucket-requirejs.html">
+<style>
+    @import url(../templates/bucket.css);
+    #toolbar {
+        background: rgba(42, 42, 42, 0.8);
+        padding: 4px;
+        border-radius: 4px;
+    }
+    #toolbar input {
+        vertical-align: middle;
+        padding-top: 2px;
+        padding-bottom: 2px;
+    }
+    #toolbar .header {
+        font-weight: bold;
+    }
+</style>
+<div id="cesiumContainer" class="fullSize"></div>
+<div id="loadingOverlay"><h1>Loading...</h1></div>
+<div id="toolbar">
+    <table><tbody>
+    <tr>
+        <td>Maximum Screen Space Error</td>
+        <td>
+            <input type="range" min="0.0" max="64.0" step="0.1" data-bind="value: maximumScreenSpaceError, valueUpdate: 'input'">
+            <input type="text" size="5" data-bind="value: maximumScreenSpaceError">
+        </td>
+    </tr>
+    <tr><td class="header">Attenuation</td></tr>
+    <tr>
+        <td>Geometric Error Scale</td>
+        <td>
+            <input type="range" min="0.0" max="2.0" step="0.1" data-bind="value: geometricErrorScale, valueUpdate: 'input'">
+            <input type="text" size="5" data-bind="value: geometricErrorScale">
+        </td>
+    </tr>
+    <tr>
+        <td>Maximum Attenuation</td>
+        <td>
+            <input type="range" min="0.0" max="64.0" step="1.0" data-bind="value: maximumAttenuation, valueUpdate: 'input'">
+            <input type="text" size="5" data-bind="value: maximumAttenuation">
+        </td>
+    </tr>
+    <tr>
+        <td>Base Resolution</td>
+        <td>
+            <input type="range" min="0.0" max="10.0" step="0.01" data-bind="value: baseResolution, valueUpdate: 'input'">
+            <input type="text" size="5" data-bind="value: baseResolution">
+        </td>
+    </tr>
+    <tr><td class="header">Eye Dome Lighting</td></tr>
+    <tr>
+        <td>Eye Dome Lighting Strength</td>
+        <td>
+            <input type="range" min="0.0" max="10.0" step="0.1" data-bind="value: eyeDomeLightingStrength, valueUpdate: 'input'">
+            <input type="text" size="5" data-bind="value: eyeDomeLightingStrength">
+        </td>
+    </tr>
+    <tr>
+        <td>Eye Dome Lighting Radius</td>
+        <td>
+            <input type="range" min="0.0" max="10.0" step="0.1" data-bind="value: eyeDomeLightingRadius, valueUpdate: 'input'">
+            <input type="text" size="5" data-bind="value: eyeDomeLightingRadius">
+        </td>
+    </tr>
+    </tbody></table>
+</div>
+<script id="cesium_sandcastle_script">
+function startup(Cesium) {
+    'use strict';
+//Sandcastle_Begin
+var viewer = new Cesium.Viewer('cesiumContainer', {
+    //baseLayerPicker : false
+});
+// tiles inspector stuff
+//viewer.extend(Cesium.viewerCesium3DTilesInspectorMixin);
+//var inspectorViewModel = viewer.cesium3DTilesInspector.viewModel;
+// end tiles inspector stuff
+
+var scene = viewer.scene;
+
+// Mt. St. Helens 3D Tileset generated from LAS provided by https://www.liblas.org/samples/
+var url = '../../../../data/NYU_Dublin/';
+var tileset = scene.primitives.add(new Cesium.Cesium3DTileset({
+    url : url
+}));
+
+tileset.readyPromise.then(function() {
+    tileset.maximumScreenSpaceError = 32.0;
+    tileset.pointShading.geometricErrorAttenuation = true;
+    tileset.pointShading.eyeDomeLighting = true;
+    tileset.pointShading.maximumAttenuation = 8.0;
+    setStyle(tileset);
+
+    var boundingSphere = tileset.boundingSphere;
+    var range = Math.max(100.0 - boundingSphere.radius, 0.0); // Set a minimum offset of 100 meters
+    viewer.camera.viewBoundingSphere(boundingSphere, new Cesium.HeadingPitchRange(0, -2.0, range));
+    viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+});
+
+function getEarthRadius(tileset) {
+    var cartographic = Cesium.Cartographic.fromCartesian(tileset.boundingSphere.center);
+    var cartesian = Cesium.Cartesian3.fromRadians(cartographic.longitude, cartographic.latitude);
+    return Cesium.Cartesian3.magnitude(cartesian);
+}
+
+function setStyle(tileset) {
+    var radius = getEarthRadius(tileset);
+    tileset.style = new Cesium.Cesium3DTileStyle({
+        defines : {
+            height : 'length(${POSITION_ABSOLUTE}) - ' + radius
+        },
+        color : 'mix(vec4(210, 194, 183, 255)/255.0, vec4(51, 61, 30, 255)/255, clamp(${height} / 70.0, 0.0, 1.0))',
+        show : '0 < ${height} && ${height} < 130'
+    });
+}
+
+// The viewModel tracks the state of our mini application.
+var viewModel = {
+    maximumScreenSpaceError : 32.0,
+    geometricErrorScale : 1.0,
+    maximumAttenuation : 8.0,
+    baseResolution : 0, // Equivalent to undefined
+    eyeDomeLightingStrength : 1.0,
+    eyeDomeLightingRadius : 1.0,
+    picking : false
+};
+
+function checkZero(newValue) {
+    var newValueFloat = parseFloat(newValue);
+    return (newValueFloat === 0.0) ? undefined : newValueFloat;
+}
+
+// Convert the viewModel members into knockout observables.
+Cesium.knockout.track(viewModel);
+
+// Bind the viewModel to the DOM elements of the UI that call for it.
+var toolbar = document.getElementById('toolbar');
+Cesium.knockout.applyBindings(viewModel, toolbar);
+
+Cesium.knockout.getObservable(viewModel, 'maximumScreenSpaceError').subscribe(
+    function(newValue) {
+        tileset.maximumScreenSpaceError = parseFloat(newValue);
+    }
+);
+
+Cesium.knockout.getObservable(viewModel, 'geometricErrorScale').subscribe(
+    function(newValue) {
+        tileset.pointShading.geometricErrorScale = parseFloat(newValue);
+    }
+);
+
+Cesium.knockout.getObservable(viewModel, 'maximumAttenuation').subscribe(
+    function(newValue) {
+        tileset.pointShading.maximumAttenuation = checkZero(newValue);
+    }
+);
+
+Cesium.knockout.getObservable(viewModel, 'baseResolution').subscribe(
+    function(newValue) {
+        tileset.pointShading.baseResolution = checkZero(newValue);
+    }
+);
+
+Cesium.knockout.getObservable(viewModel, 'eyeDomeLightingStrength').subscribe(
+    function(newValue) {
+        tileset.pointShading.eyeDomeLightingStrength = parseFloat(newValue);
+    }
+);
+
+Cesium.knockout.getObservable(viewModel, 'eyeDomeLightingRadius').subscribe(
+    function(newValue) {
+        tileset.pointShading.eyeDomeLightingRadius = parseFloat(newValue);
+    }
+);
+/*
+Sandcastle.addToggleButton('Enable Attenuation', true, function(checked) {
+    tileset.pointShading.geometricErrorAttenuation = checked;
+});
+
+Sandcastle.addToggleButton('Enable Eye Dome Lighting', true, function(checked) {
+    tileset.pointShading.eyeDomeLighting = checked;
+});
+*/
+var labelEntity = viewer.entities.add({
+    label : {
+        show : false,
+        showBackground : true,
+        font : '14px monospace',
+        horizontalOrigin : Cesium.HorizontalOrigin.LEFT,
+        verticalOrigin : Cesium.VerticalOrigin.TOP,
+        pixelOffset : new Cesium.Cartesian2(15, 0)
+    }
+});
+/*
+Sandcastle.addToggleButton('Pick Position', false, function(checked) {
+    viewModel.picking = checked;
+    labelEntity.label.show = checked;
+});
+
+
+// Mouse over the globe to see the cartographic position
+var handler = new Cesium.ScreenSpaceEventHandler(scene.canvas);
+handler.setInputAction(function(movement) {
+    if (!viewModel.picking) {
+        return;
+    }
+
+    var foundPosition = false;
+
+    var scene = viewer.scene;
+    if (scene.mode !== Cesium.SceneMode.MORPHING) {
+        var pickedObject = scene.pick(movement.endPosition);
+        if (scene.pickPositionSupported && Cesium.defined(pickedObject)) {
+            var cartesian = viewer.scene.pickPosition(movement.endPosition);
+
+            if (Cesium.defined(cartesian)) {
+
+                var cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+
+                labelEntity.label.text =
+                    'x: ' + ('   ' + cartesian.x).slice(-16) +
+                    '\ny: ' + ('   ' + cartesian.y).slice(-16) +
+                    '\nz: ' + ('   ' + cartesian.z).slice(-16);
+
+                labelEntity.label.show = true;
+                labelEntity.position = cartesian;
+                labelEntity.label.eyeOffset = new Cesium.Cartesian3(0.0, 0.0, -cartographic.height * (scene.mode === Cesium.SceneMode.SCENE2D ? 1.5 : 2.5));
+
+                foundPosition = true;
+            }
+        }
+    }
+
+    if (!foundPosition) {
+        labelEntity.label.show = false;
+    }
+}, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+*/
+/** begin czml path generator **/
+var Cartesian2 = Cesium.Cartesian2;
+var Cartesian3 = Cesium.Cartesian3;
+var CesiumMath = Cesium.Math;
+var Color = Cesium.Color;
+var defined = Cesium.defined;
+var LabelCollection = Cesium.LabelCollection;
+var Matrix3 = Cesium.Matrix3;
+var PointPrimitiveCollection = Cesium.PointPrimitiveCollection;
+var Quaternion = Cesium.Quaternion;
+var VerticalOrigin = Cesium.VerticalOrigin;
+var HorizontalOrigin = Cesium.HorizontalOrigin;
+
+// some state
+var pointCollection = scene.primitives.add(new PointPrimitiveCollection());
+var labelCollection = scene.primitives.add(new LabelCollection());
+var adjustingTime = false;
+var adjustingWait = false;
+var leftDown = false;
+
+var selectedWaypoint;
+var waypoints = JSON.parse('[{"position":{"x":3793164.1548193754,"y":-415128.3442616701,"z":5093661.208605975},"wait":0,"time":0},{"position":{"x":3793162.7203201596,"y":-415134.15427427646,"z":5093661.722547397},"wait":0,"time":0},{"position":{"x":3793157.867389983,"y":-415157.61191851116,"z":5093663.36620158},"wait":0,"time":2.0881057268722465},{"position":{"x":3793157.37872043,"y":-415161.9761718394,"z":5093663.25587545},"wait":1.4308943089430894,"time":1.973568281938326},{"position":{"x":3793157.659035936,"y":-415164.4368755494,"z":5093662.878169935},"wait":0,"time":0.881057268722467},{"position":{"x":3793158.6812316794,"y":-415166.2569793352,"z":5093661.88075233},"wait":0,"time":0},{"position":{"x":3793160.0484662047,"y":-415166.8866787818,"z":5093660.817918987},"wait":0,"time":0},{"position":{"x":3793161.902942131,"y":-415167.11275648384,"z":5093659.415643234},"wait":0,"time":2.1074380165289255},{"position":{"x":3793176.9217870417,"y":-415171.9587415038,"z":5093647.441382233},"wait":0,"time":2.343612334801762},{"position":{"x":3793179.6124196826,"y":-415172.4687974664,"z":5093645.335782732},"wait":0,"time":1.806167400881057}]');
+updateGraphics();
+
+function Waypoint(position) {
+    this.position = Cartesian3.clone(position);
+    this.wait = 0.0;
+    this.time = 0.0;
+}
+
+var leftClickHandler = new Cesium.ScreenSpaceEventHandler(scene.canvas);
+leftClickHandler.setInputAction(function(movement) {
+    var scene = viewer.scene;
+    if (scene.mode !== Cesium.SceneMode.MORPHING) {
+        // picking
+        if (!adjustingTime && !adjustingWait) {
+            var pickedObject = scene.pick(movement.position);
+            if (scene.pickPositionSupported && Cesium.defined(pickedObject)) {
+                var cartesian = viewer.scene.pickPosition(movement.position);
+                if (Cesium.defined(cartesian)) {
+                   handlePick(cartesian);
+                }
+            }
+        }
+        updateGraphics();
+    }
+}, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+var moveHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+moveHandler.setInputAction(function(movement) {
+    if (leftDown) {
+        if (adjustingTime && defined(selectedWaypoint)) {
+            var width = scene.context.drawingBufferWidth;
+
+            selectedWaypoint.time = movement.endPosition.x / width * 10;
+        }
+        if (adjustingWait && defined(selectedWaypoint)) {
+            var height = scene.context.drawingBufferHeight;
+
+            selectedWaypoint.wait = (movement.endPosition.y / height) * 10;
+        }
+        if ((adjustingWait || adjustingTime) && defined(selectedWaypoint)) {
+            updateGraphics();
+        }
+    }
+}, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
+var downHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+downHandler.setInputAction(function(movement) {
+    leftDown = true;
+}, Cesium.ScreenSpaceEventType.LEFT_DOWN);
+
+var upHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+upHandler.setInputAction(function(movement) {
+    leftDown = false;
+}, Cesium.ScreenSpaceEventType.LEFT_UP);
+
+function updateGraphics() {
+    // update point collection
+    var waypointCount = waypoints.length;
+    pointCollection.removeAll();
+    labelCollection.removeAll();
+    for (var i = 0 ; i < waypointCount; i++) {
+        var waypoint = waypoints[i];
+        var labelText = '';
+        if (waypoint.time > 0.0) {
+            labelText += ('time: ' + waypoint.time).slice(0, 10);
+        }
+        if (waypoint.wait > 0.0) {
+            if (labelText !== '') {
+                labelText += '\n';
+            }
+            labelText += ('wait: ' + waypoint.wait).slice(0, 10);
+        }
+        if (labelText !== '') {
+             labelCollection.add({
+                show: true,
+                scale: 0.5,
+                showBackground: true,
+                horizontalOrigin: HorizontalOrigin.LEFT,
+                verticalOrigin: VerticalOrigin.TOP,
+                pixelOffset: new Cartesian2(10, 10),
+                disableDepthTestDistance: Number.POSITIVE_INFINITY,
+                position:waypoint.position,
+                text: labelText
+            });
+        }
+
+        if (waypoint === selectedWaypoint) {
+            pointCollection.add({
+                pixelSize: 10,
+                color: Color.LIGHTGREEN,
+                position: waypoint.position,
+                show: true,
+                disableDepthTestDistance: Number.POSITIVE_INFINITY
+            });
+        } else {
+            pointCollection.add({
+                pixelSize: 10,
+                color: Color.YELLOW,
+                position: waypoint.position,
+                show: true,
+                disableDepthTestDistance: Number.POSITIVE_INFINITY
+            });
+        }
+    }
+}
+
+function handlePick(cartesian) {
+    // Check if this point is close to any selected waypoints
+    // If so, select the waypoint instead.
+    var nearWaypoint;
+    var waypointCount = waypoints.length;
+    for (var i = 0; i < waypointCount; i++) {
+        var waypointPosition = waypoints[i].position;
+        if (Cartesian3.distance(waypointPosition, cartesian) < 0.5) {
+            nearWaypoint = waypoints[i];
+            // If near selected waypoint, move it
+            if (nearWaypoint === selectedWaypoint) {
+                Cartesian3.clone(cartesian, selectedWaypoint.position);
+            }
+            break;
+        }
+    }
+
+    if (defined(nearWaypoint)) {
+        selectedWaypoint = nearWaypoint;
+    } else {
+        selectedWaypoint = new Waypoint(cartesian);
+        waypoints.push(selectedWaypoint);
+    }
+}
+
+Sandcastle.addToolbarButton('Delete', function() {
+    if (defined(selectedWaypoint)) {
+        // TODO: bad, write something better
+        var waypointCount = waypoints.length;
+        var oldWaypoints = waypoints;
+        waypoints = [];
+        for (var i = 0; i < waypointCount; i++) {
+            if (oldWaypoints[i] === selectedWaypoint) {
+                continue;
+            }
+            waypoints.push(oldWaypoints[i]);
+        }
+        selectedWaypoint = undefined;
+        updateGraphics();
+    }
+});
+
+Sandcastle.addToolbarButton('Clear Time/Wait', function() {
+    if (defined(selectedWaypoint)) {
+        selectedWaypoint.time = 0.0;
+        selectedWaypoint.wait = 0.0;
+        updateGraphics();
+    }
+});
+
+Sandcastle.addToggleButton('Time', false, function(checked) {
+    adjustingTime = checked;
+    scene.screenSpaceCameraController.enableInputs = !(adjustingTime || adjustingWait);
+});
+
+Sandcastle.addToggleButton('Wait', false, function(checked) {
+    adjustingWait = checked;
+    scene.screenSpaceCameraController.enableInputs = !(adjustingTime || adjustingWait);
+});
+
+Sandcastle.addToolbarButton('run', function() {
+    console.log(JSON.stringify(waypoints));
+
+    viewer.dataSources.removeAll();
+    var czml = generateCzml(waypoints);
+    //console.log(JSON.stringify(czml));
+    var dataSourcePromise = viewer.dataSources.add(Cesium.CzmlDataSource.load(czml));
+
+    dataSourcePromise.then(function(dataSource){
+        //viewer.trackedEntity = dataSource.entities.getById('cesium car');
+    }).otherwise(function(error){
+        window.alert(error);
+    });
+});
+
+function generateCzml(originalWaypoints) {
+    // duplicate waypoints to mimic pauses - that's how it'll work in the CZML
+    var originalWaypointCount = originalWaypoints.length;
+    var waypoints = [];
+    var waypoint;
+    for (var i = 0; i < originalWaypointCount; i++) {
+        waypoint = originalWaypoints[i];
+        var newWaypoint = new Waypoint(waypoint.position);
+        newWaypoint.time = waypoint.time;
+        waypoints.push(newWaypoint);
+        if (waypoint.wait > 0.0) {
+            newWaypoint = new Waypoint(waypoint.position);
+            newWaypoint.time = waypoint.wait;
+            waypoints.push(newWaypoint);
+        }
+    }
+
+    // compute timestamps for each waypoint
+    var waypointCount = waypoints.length;
+    var firstWaypoint = waypoints[0];
+    var accumulatedTime = firstWaypoint.time;
+
+    var positionTimestamps = [accumulatedTime];
+    var positions = [firstWaypoint.position];
+    var interpStartIndex = -1;
+    // for each waypoint...
+    // - if the waypoint doesn't have a time...
+    //   - add to interp
+    // - if the waypoint has a time
+    //   - if interp is empty, add to accumulatedTime and append
+    //   - otherwise, interpolate times and add all interp
+    for (i = 1; i < waypointCount; i++) {
+        waypoint = waypoints[i];
+        if (waypoint.time === 0.0) {
+            if (interpStartIndex === -1) {
+                interpStartIndex = i;
+            }
+            continue;
+        }
+        if (interpStartIndex === -1) {
+            accumulatedTime += waypoint.time;
+            positions.push(waypoint.position);
+            positionTimestamps.push(accumulatedTime);
+        } else {
+            // Interpolate - give each waypoint a proportion of the waypoint time based on
+            // its length relative to the full polyline length.
+            // Each waypoint is considered to be the "end" of a segment
+            var polylineLength = 0.0;
+            for (var j = interpStartIndex; j <= i; j++) {
+                polylineLength += Cartesian3.distance(waypoints[j].position, waypoints[j - 1].position);
+            }
+            for (j = interpStartIndex; j <= i; j++) {
+                var proportion = Cartesian3.distance(waypoints[j].position, waypoints[j - 1].position) / polylineLength;
+                accumulatedTime += waypoint.time * proportion;
+                positions.push(waypoints[j].position);
+                positionTimestamps.push(accumulatedTime);
+            }
+            interpStartIndex = -1;
+        }
+    }
+
+    var orientationTimestamps = [];
+    var orientations = [];
+    // Compute orientations. For each waypoint, point to the next waypoint, unless it's very nearby.
+    for (i = 0; i < waypointCount - 1; i++) {
+        var pos = positions[i];
+        var nextPos = positions[i + 1];
+        if (Cartesian3.distance(pos, nextPos) < 0.1) { // usually, a wait
+            // duplicate previous orientation to imitate a wait. TODO this is kind of hacky...
+            orientations.push(orientations[orientations.length - 1]);
+            orientationTimestamps.push(positionTimestamps[i]);
+            i++;
+            orientations.push(orientations[orientations.length - 1]);
+            orientationTimestamps.push(positionTimestamps[i]);
+            continue;
+        }
+        // compute rotation to X-forward
+        var targetForward = Cartesian3.normalize(Cartesian3.subtract(nextPos, pos, new Cartesian3()), new Cartesian3());
+        var rotationAxis = Cartesian3.cross(Cartesian3.UNIT_X, targetForward, new Cartesian3());
+        var angle = Math.acos(Cartesian3.dot(Cartesian3.UNIT_X, targetForward));
+        var rotateToForward = Quaternion.fromAxisAngle(rotationAxis, angle);
+
+        // compute target Y-up using forward and direction from origin
+        var out = Cartesian3.normalize(pos, new Cartesian3());
+        var rightAxis = Cartesian3.cross(targetForward, out, new Cartesian3());
+        var targetForwardToUp = Quaternion.fromAxisAngle(rightAxis, 1.5708);
+        var targetUp = Matrix3.multiplyByVector(Matrix3.fromQuaternion(targetForwardToUp), targetForward, new Cartesian3());
+
+        var currentUp = Matrix3.multiplyByVector(Matrix3.fromQuaternion(rotateToForward), Cartesian3.UNIT_Z, new Cartesian3());
+        angle = Math.acos(Cartesian3.dot(targetUp, currentUp));
+        var rotateToUp = Quaternion.fromAxisAngle(targetForward, -angle);
+
+        // compose quaternions
+        orientations.push(Quaternion.multiply(rotateToUp, rotateToForward, new Quaternion()));
+        orientationTimestamps.push(positionTimestamps[i]);
+    }
+
+    // generate czml!
+    var cartesians = [];
+    for (i = 0; i < waypointCount; i++) {
+        cartesians.push(positionTimestamps[i]);
+        var position = positions[i];
+        cartesians.push(position.x);
+        cartesians.push(position.y);
+        cartesians.push(position.z);
+    }
+
+    var quaternions = [];
+    var orientationCount = orientations.length;
+    for (i = 0; i < orientationCount; i++) {
+        quaternions.push(orientationTimestamps[i]);
+        var quaternion = orientations[i];
+        quaternions.push(quaternion.x);
+        quaternions.push(quaternion.y);
+        quaternions.push(quaternion.z);
+        quaternions.push(quaternion.w);
+    }
+
+    return [{
+            "id": "document",
+            "name": "CZML Model",
+            "version": "1.0",
+            "clock": {
+                "interval": "2017-02-15T09:00:00Z/2017-02-15T09:01:00Z",
+                "currentTime": "2017-02-15T09:00:00Z",
+                "multiplier": 1,
+                "range": "LOOP_STOP",
+                "step": "SYSTEM_CLOCK_MULTIPLIER"
+            }
+        }, {
+            "id": "cesium car",
+            "model": {
+                "gltf": "../../SampleData/CesiumCar/fav_v11b_sp_transformed.gltf",
+                "scale": 1.0,
+                "minimumPixelSize": 4
+            },
+            "position": {
+                "interpolationAlgorithm": "LINEAR",
+                "forwardExtrapolationType": "HOLD",
+                "interpolationDegree": 1,
+                "epoch": "2017-02-15T09:00:00Z",
+                "cartesian": cartesians
+            },
+            "orientation": {
+                "interpolationAlgorithm": "LINEAR",
+                "forwardExtrapolationType": "HOLD",
+                "interpolationDegree": 1,
+                "epoch": "2017-02-15T09:00:00Z",
+                "unitQuaternion": quaternions
+            }
+        }];
+}
+
+/** end czml path generator **///Sandcastle_End
+    Sandcastle.finishedLoading();
+}
+if (typeof Cesium !== "undefined") {
+    startup(Cesium);
+} else if (typeof require === "function") {
+    require(["Cesium"], startup);
+}
+</script>
+</body>
+</html>
