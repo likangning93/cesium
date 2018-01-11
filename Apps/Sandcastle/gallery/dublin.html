@@ -311,7 +311,7 @@ moveHandler.setInputAction(function(movement) {
         if (adjustingTime && defined(selectedWaypoint)) {
             var width = scene.context.drawingBufferWidth;
 
-            selectedWaypoint.time = movement.endPosition.x / width * 10;
+            selectedWaypoint.time = movement.endPosition.x / width * 20;
         }
         if (adjustingWait && defined(selectedWaypoint)) {
             var height = scene.context.drawingBufferHeight;

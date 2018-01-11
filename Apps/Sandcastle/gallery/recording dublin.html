@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no">
+    <meta name="description" content="Use Viewer to start building new applications or easily embed Cesium into existing applications.">
+    <meta name="cesium-sandcastle-labels" content="Beginner, Showcases">
+    <title>Cesium Demo</title>
+    <script type="text/javascript" src="../Sandcastle-header.js"></script>
+    <script type="text/javascript" src="../../../ThirdParty/requirejs-2.1.20/require.js"></script>
+    <script type="text/javascript">
+        if(typeof require === "function") {
+            require.config({
+                baseUrl : '../../../Source',
+                waitSeconds : 120
+            });
+        }
+    </script>
+</head>
+<body class="sandcastle-loading" data-sandcastle-bucket="bucket-requirejs.html">
+<style>
+    @import url(../templates/bucket.css);
+</style>
+<div id="cesiumContainer" class="fullSize"></div>
+<div id="loadingOverlay"><h1>Loading...</h1></div>
+<div id="toolbar">
+    <table><tbody>
+    <tr>
+        <td>Maximum Screen Space Error</td>
+        <td>
+            <input type="range" min="0.0" max="64.0" step="0.1" data-bind="value: maximumScreenSpaceError, valueUpdate: 'input'">
+            <input type="text" size="5" data-bind="value: maximumScreenSpaceError">
+        </td>
+    </tr>
+     <tr>
+        <td>Maximum Attenuation</td>
+        <td>
+            <input type="range" min="0.0" max="64.0" step="1.0" data-bind="value: maximumAttenuation, valueUpdate: 'input'">
+            <input type="text" size="5" data-bind="value: maximumAttenuation">
+        </td>
+    </tr>
+</tbody></table>
+</div><script id="cesium_sandcastle_script">
+function startup(Cesium) {
+    'use strict';
+//Sandcastle_Begin
+var defined = Cesium.defined;
+var Cartesian3 = Cesium.Cartesian3;
+var JulianDate = Cesium.JulianDate;
+
+var viewer = new Cesium.Viewer('cesiumContainer');
+var scene = viewer.scene;
+
+viewer.allowDataSourcesToSuspendAnimation = true;
+viewer.targetFrameRate = 30;
+
+viewer.clock.clockRange = Cesium.ClockRange.CLAMPED; // end at end
+
+var url = 'http://localhost:8002/tilesets/NYU_Dublin/';
+var tileset = scene.primitives.add(new Cesium.Cesium3DTileset({
+    url : url
+}));
+
+var trackedEntity;
+
+tileset.readyPromise.then(function() {
+    tileset.maximumScreenSpaceError = 32.0;
+    tileset.pointShading.geometricErrorAttenuation = true;
+    tileset.pointShading.eyeDomeLighting = true;
+    tileset.pointShading.maximumAttenuation = 8.0;
+    setStyle(tileset);
+
+    var boundingSphere = tileset.boundingSphere;
+    var range = Math.max(100.0 - boundingSphere.radius, 0.0); // Set a minimum offset of 100 meters
+    viewer.camera.viewBoundingSphere(boundingSphere, new Cesium.HeadingPitchRange(0, -2.0, range));
+    viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+});
+
+// The viewModel tracks the state of our mini application.
+var viewModel = {
+    maximumScreenSpaceError : 32.0,
+    maximumAttenuation : 8.0
+};
+
+// Convert the viewModel members into knockout observables.
+Cesium.knockout.track(viewModel);
+
+// Bind the viewModel to the DOM elements of the UI that call for it.
+var toolbar = document.getElementById('toolbar');
+Cesium.knockout.applyBindings(viewModel, toolbar);
+
+Cesium.knockout.getObservable(viewModel, 'maximumScreenSpaceError').subscribe(
+    function(newValue) {
+        tileset.maximumScreenSpaceError = parseFloat(newValue);
+    }
+);
+
+function checkZero(newValue) {
+    var newValueFloat = parseFloat(newValue);
+    return (newValueFloat === 0.0) ? undefined : newValueFloat;
+}
+
+Cesium.knockout.getObservable(viewModel, 'maximumAttenuation').subscribe(
+    function(newValue) {
+        tileset.pointShading.maximumAttenuation = checkZero(newValue);
+    }
+);
+
+
+function getEarthRadius(tileset) {
+    var cartographic = Cesium.Cartographic.fromCartesian(tileset.boundingSphere.center);
+    var cartesian = Cesium.Cartesian3.fromRadians(cartographic.longitude, cartographic.latitude);
+    return Cesium.Cartesian3.magnitude(cartesian);
+}
+
+function setStyle(tileset) {
+    var radius = getEarthRadius(tileset);
+    tileset.style = new Cesium.Cesium3DTileStyle({
+        defines : {
+            height : 'length(${POSITION_ABSOLUTE}) - ' + radius
+        },
+        color : 'mix(vec4(210, 194, 183, 255)/255.0, vec4(51, 61, 30, 255)/255, clamp(${height} / 30.0, 0.0, 1.0))',
+        show : '0 < ${height} && ${height} < 130'
+    });
+}
+
+var dataSourcePromise = viewer.dataSources.add(Cesium.CzmlDataSource.load('../../SampleData/cars_in_dublin.czml'));
+
+dataSourcePromise.then(function(dataSource){
+    trackedEntity = dataSource.entities.getById('cesium car 3');
+    viewer.trackedEntity = trackedEntity;
+}).otherwise(function(error){
+    window.alert(error);
+});
+
+var tgtPos = new Cartesian3(64.00855964084622, 78.42716551665217, 119.19319139234722);
+var tgtDir = new Cartesian3(-0.4093123202360455, -0.5015142546412423, -0.7621987122100274);
+var tgtUp = new Cartesian3(-0.48193502213958017, -0.5904959875646323, 0.6473431262517523);
+var tgtRight = new Cartesian3(-0.7747270867462301, 0.632295770238659, -6.536874375129286e-10);
+
+Sandcastle.addToolbarButton('store cam', function() {
+    if (defined(trackedEntity)) {
+        console.log(viewer.scene.camera.position);
+        console.log(viewer.scene.camera.direction);
+        console.log(viewer.scene.camera.up);
+        console.log(viewer.scene.camera.right);
+
+        Cartesian3.clone(viewer.scene.camera.position, tgtPos);
+        Cartesian3.clone(viewer.scene.camera.direction, tgtDir);
+        Cartesian3.clone(viewer.scene.camera.up, tgtUp);
+        Cartesian3.clone(viewer.scene.camera.right, tgtRight);
+    }
+});
+
+
+var frameNumber = 0;
+var recording = false;
+var frameTime = new JulianDate();
+var totalFrames = 0;
+var recordingFPS = 30;
+var ms = 1.0 / recordingFPS;
+function downloadBlob(blob) {
+    var link = document.createElement("a");
+    link.download = frameNumber + '.jpg';
+    link.href = window.URL.createObjectURL(blob);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    //setTimeout(function(){
+        JulianDate.addSeconds(frameTime, ms, frameTime);
+        viewer.clockViewModel.currentTime = frameTime;
+        viewer.timeline.updateFromClock();
+        viewer.resize();
+        viewer.render();
+    //}, 2000);
+}
+
+viewer.scene.postRender.addEventListener(function(scene) {
+    if (!recording) {
+        return;
+    }
+    else if (frameNumber === totalFrames) {
+        console.log('rendering complete');
+        recording = false;
+        viewer.useDefaultRenderLoop = true;
+        return;
+    }
+    frameNumber++;
+    viewer.canvas.toBlob(downloadBlob, "image/jpeg");
+});
+
+Sandcastle.addToolbarButton('go to view', function() {
+    Cartesian3.clone(tgtPos, viewer.scene.camera.position);
+    Cartesian3.clone(tgtDir, viewer.scene.camera.direction);
+    Cartesian3.clone(tgtUp, viewer.scene.camera.up);
+    Cartesian3.clone(tgtRight, viewer.scene.camera.right);
+});
+
+Sandcastle.addToolbarButton('render', function() {
+    viewer.clock.shouldAnimate = false; // stop the clock
+    var startTime = viewer.clockViewModel.startTime;
+    var stopTime  = viewer.clockViewModel.stopTime ;
+    totalFrames = Math.ceil(JulianDate.secondsDifference(stopTime , startTime) * recordingFPS);
+
+    JulianDate.clone(startTime, frameTime);
+    viewer.clockViewModel.currentTime = frameTime;
+    viewer.timeline.updateFromClock();
+
+    Cartesian3.clone(tgtPos, viewer.scene.camera.position);
+    Cartesian3.clone(tgtDir, viewer.scene.camera.direction);
+    Cartesian3.clone(tgtUp, viewer.scene.camera.up);
+    Cartesian3.clone(tgtRight, viewer.scene.camera.right);
+
+    frameNumber = 0;
+
+    recording = !recording;
+    console.log('recording: ' + recording);
+
+    if (recording) {
+        console.log('writing ' + totalFrames + ' frames');
+        viewer.useDefaultRenderLoop = false;
+        viewer.resize();
+        viewer.render();
+    } else {
+        console.log('recording stopped with ' + frameNumber + ' frames written.');
+        viewer.useDefaultRenderLoop = true;
+    }
+});
+//Sandcastle_End
+    Sandcastle.finishedLoading();
+}
+if (typeof Cesium !== "undefined") {
+    startup(Cesium);
+} else if (typeof require === "function") {
+    require(["Cesium"], startup);
+}
+</script>
+</body>
+</html>
