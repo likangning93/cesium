@@ -100,7 +100,7 @@ var viewer = new Cesium.Viewer('cesiumContainer', {
 var scene = viewer.scene;
 
 // Mt. St. Helens 3D Tileset generated from LAS provided by https://www.liblas.org/samples/
-var url = '../../../../data/NYU_Dublin/';
+var url = 'http://localhost:8002/tilesets/NYU_Dublin/';
 var tileset = scene.primitives.add(new Cesium.Cesium3DTileset({
     url : url
 }));
@@ -278,7 +278,7 @@ var adjustingWait = false;
 var leftDown = false;
 
 var selectedWaypoint;
-var waypoints = JSON.parse('[{"position":{"x":3793164.1548193754,"y":-415128.3442616701,"z":5093661.208605975},"wait":0,"time":0},{"position":{"x":3793162.7203201596,"y":-415134.15427427646,"z":5093661.722547397},"wait":0,"time":0},{"position":{"x":3793157.867389983,"y":-415157.61191851116,"z":5093663.36620158},"wait":0,"time":2.0881057268722465},{"position":{"x":3793157.37872043,"y":-415161.9761718394,"z":5093663.25587545},"wait":1.4308943089430894,"time":1.973568281938326},{"position":{"x":3793157.659035936,"y":-415164.4368755494,"z":5093662.878169935},"wait":0,"time":0.881057268722467},{"position":{"x":3793158.6812316794,"y":-415166.2569793352,"z":5093661.88075233},"wait":0,"time":0},{"position":{"x":3793160.0484662047,"y":-415166.8866787818,"z":5093660.817918987},"wait":0,"time":0},{"position":{"x":3793161.902942131,"y":-415167.11275648384,"z":5093659.415643234},"wait":0,"time":2.1074380165289255},{"position":{"x":3793176.9217870417,"y":-415171.9587415038,"z":5093647.441382233},"wait":0,"time":2.343612334801762},{"position":{"x":3793179.6124196826,"y":-415172.4687974664,"z":5093645.335782732},"wait":0,"time":1.806167400881057}]');
+var waypoints = JSON.parse('[{"position":{"x":3792984.7523233113,"y":-415626.7786524582,"z":5093751.383848479},"wait":0,"time":0},{"position":{"x":3792981.062763432,"y":-415654.67900809395,"z":5093751.83982436},"wait":0,"time":0},{"position":{"x":3792981.3366281744,"y":-415656.83770198154,"z":5093751.458806289},"wait":0,"time":0},{"position":{"x":3792982.5365218935,"y":-415657.8208687477,"z":5093750.4887058595},"wait":0,"time":0},{"position":{"x":3792983.993834728,"y":-415658.0509285248,"z":5093749.397371495},"wait":0,"time":0},{"position":{"x":3792997.7565851854,"y":-415659.70130747685,"z":5093739.0809932295},"wait":0,"time":0},{"position":{"x":3792999.425561976,"y":-415658.5349806993,"z":5093737.953246055},"wait":0,"time":0},{"position":{"x":3793000.498116694,"y":-415656.52468040993,"z":5093737.318804108},"wait":0,"time":0},{"position":{"x":3793000.8282486666,"y":-415654.00737613894,"z":5093737.271097338},"wait":0,"time":0},{"position":{"x":3793005.0343612973,"y":-415626.0093012121,"z":5093736.414492959},"wait":0,"time":0},{"position":{"x":3793005.106974686,"y":-415624.39130692586,"z":5093736.519209336},"wait":0,"time":0},{"position":{"x":3793004.3157176822,"y":-415622.81746385904,"z":5093737.243058044},"wait":0,"time":0},{"position":{"x":3793001.6612716694,"y":-415622.25268397474,"z":5093739.293390674},"wait":0,"time":0},{"position":{"x":3792987.955080579,"y":-415620.3810242807,"z":5093749.520317478},"wait":0,"time":0},{"position":{"x":3792986.438148425,"y":-415620.7110075121,"z":5093750.613837062},"wait":0,"time":0},{"position":{"x":3792985.4862400983,"y":-415622.1696023137,"z":5093751.208983416},"wait":0,"time":0},{"position":{"x":3792984.7412657687,"y":-415624.7825034844,"z":5093751.541839033},"wait":0,"time":9.993055555555555}]');
 updateGraphics();
 
 function Waypoint(position) {
@@ -545,12 +545,18 @@ function generateCzml(originalWaypoints) {
         // compute target Y-up using forward and direction from origin
         var out = Cartesian3.normalize(pos, new Cartesian3());
         var rightAxis = Cartesian3.cross(targetForward, out, new Cartesian3());
-        var targetForwardToUp = Quaternion.fromAxisAngle(rightAxis, 1.5708);
+        var targetForwardToUp = Quaternion.fromAxisAngle(rightAxis, CesiumMath.PI * 0.5);
         var targetUp = Matrix3.multiplyByVector(Matrix3.fromQuaternion(targetForwardToUp), targetForward, new Cartesian3());
 
         var currentUp = Matrix3.multiplyByVector(Matrix3.fromQuaternion(rotateToForward), Cartesian3.UNIT_Z, new Cartesian3());
         angle = Math.acos(Cartesian3.dot(targetUp, currentUp));
-        var rotateToUp = Quaternion.fromAxisAngle(targetForward, -angle);
+        // sign of angle is based on which side of targetUp the currentUp is on
+        var sign = Cartesian3.cross(currentUp, targetUp, new Cartesian3());
+        if (Cartesian3.dot(sign, targetForward) < 0) {
+            angle = -angle;
+        }
+
+        var rotateToUp = Quaternion.fromAxisAngle(targetForward, angle);
 
         // compose quaternions
         orientations.push(Quaternion.multiply(rotateToUp, rotateToForward, new Quaternion()));
