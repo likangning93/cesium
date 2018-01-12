@@ -99,8 +99,8 @@ define([
 
     function configureCanvasSize(widget) {
         var canvas = widget._canvas;
-        var width = canvas.clientWidth;
-        var height = canvas.clientHeight;
+        var width = widget.force1080 ? 1920 : canvas.clientWidth;
+        var height = widget.force1080 ? 1080 : canvas.clientHeight;
         var resolutionScale = widget._resolutionScale;
         if (!widget._supportsImageRenderingPixelated) {
             resolutionScale *= defaultValue(window.devicePixelRatio, 1.0);
@@ -253,6 +253,8 @@ define([
         this._resolutionScale = 1.0;
         this._forceResize = false;
         this._clock = defined(options.clock) ? options.clock : new Clock();
+
+        this.force1080 = false;
 
         configureCanvasSize(this);
 
@@ -683,8 +685,8 @@ define([
      */
     CesiumWidget.prototype.resize = function() {
         var canvas = this._canvas;
-        var width = canvas.clientWidth;
-        var height = canvas.clientHeight;
+        var width = this.force1080 ? 1920 : canvas.clientWidth;
+        var height = this.force1080 ? 1080 : canvas.clientHeight;
         if (!this._forceResize && this._canvasWidth === width && this._canvasHeight === height) {
             return;
         }

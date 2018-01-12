@@ -184,6 +184,8 @@ viewer.scene.postRender.addEventListener(function(scene) {
         console.log('rendering complete');
         recording = false;
         viewer.useDefaultRenderLoop = true;
+        scene.screenSpaceCameraController.enableInputs = true;
+        viewer._cesiumWidget.force1080 = false;
         return;
     }
     frameNumber++;
@@ -212,19 +214,24 @@ Sandcastle.addToolbarButton('render', function() {
     Cartesian3.clone(tgtUp, viewer.scene.camera.up);
     Cartesian3.clone(tgtRight, viewer.scene.camera.right);
 
-    frameNumber = 0;
-
     recording = !recording;
     console.log('recording: ' + recording);
 
     if (recording) {
+        frameNumber = 0;
         console.log('writing ' + totalFrames + ' frames');
         viewer.useDefaultRenderLoop = false;
+        viewer._cesiumWidget.force1080 = true;
+        viewer._cesiumWidget.resize();
         viewer.resize();
         viewer.render();
+        scene.screenSpaceCameraController.enableInputs = false;
     } else {
         console.log('recording stopped with ' + frameNumber + ' frames written.');
+        frameNumber = 0;
         viewer.useDefaultRenderLoop = true;
+        scene.screenSpaceCameraController.enableInputs = true;
+        viewer._cesiumWidget.force1080 = false;
     }
 });
 //Sandcastle_End
