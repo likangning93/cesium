@@ -119,11 +119,14 @@ defineSuite([
     var tilesetSubtreeUrl = './Data/Cesium3DTiles/Tilesets/TilesetSubtreeExpiration/subtree.json';
     var batchedExpirationUrl = './Data/Cesium3DTiles/Batched/BatchedExpiration';
     var batchedColorsB3dmUrl = './Data/Cesium3DTiles/Batched/BatchedColors/batchedColors.b3dm';
+    var batchedVertexColorsUrl = './Data/Cesium3DTiles/Batched/BatchedWithVertexColors';
 
     var styleUrl = './Data/Cesium3DTiles/Style/style.json';
 
     var pointCloudUrl = './Data/Cesium3DTiles/PointCloud/PointCloudRGB';
     var pointCloudBatchedUrl = './Data/Cesium3DTiles/PointCloud/PointCloudBatched';
+
+    var invalidTileset = './Data/Cesium3DTiles/Tilesets/TilesetInvalid/';
 
     beforeAll(function() {
         scene = createScene();
@@ -1684,6 +1687,24 @@ defineSuite([
         });
     });
 
+    it('tile failed event is raised', function() {
+        viewNothing();
+        return Cesium3DTilesTester.loadTileset(scene, invalidTileset).then(function(tileset) {
+            var spyUpdate = jasmine.createSpy('listener');
+            tileset.tileFailed.addEventListener(spyUpdate);
+            tileset.maximumMemoryUsage = 0;
+            viewRootOnly();
+            return Cesium3DTilesTester.waitForTilesLoaded(scene, tileset).then(function() {
+                expect(spyUpdate.calls.count()).toEqual(1);
+
+                var arg = spyUpdate.calls.argsFor(0)[0];
+                expect(arg).toBeDefined();
+                expect(arg.url).toContain('does_not_exist.b3dm');
+                expect(arg.message).toBeDefined();
+            });
+        });
+    });
+
     it('destroys', function() {
         return Cesium3DTilesTester.loadTileset(scene, tilesetUrl).then(function(tileset) {
             var root = tileset._root;
@@ -2117,6 +2138,10 @@ defineSuite([
     it('sets colorBlendMode for instanced tileset', function() {
         viewInstances();
         return testColorBlendMode(instancedRedMaterialUrl);
+    });
+
+    it('sets colorBlendMode for vertex color tileset', function() {
+        return testColorBlendMode(batchedVertexColorsUrl);
     });
 
     ///////////////////////////////////////////////////////////////////////////

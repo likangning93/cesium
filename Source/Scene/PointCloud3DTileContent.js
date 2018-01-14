@@ -1149,7 +1149,7 @@ define([
 
         if (hasBatchTable) {
             // Batched points always use the HIGHLIGHT color blend mode
-            drawVS = batchTable.getVertexShaderCallback(false, 'a_batchId')(drawVS);
+            drawVS = batchTable.getVertexShaderCallback(false, 'a_batchId', undefined)(drawVS);
             drawFS = batchTable.getFragmentShaderCallback(false, undefined)(drawFS);
         }
 
@@ -1197,12 +1197,11 @@ define([
     }
 
     function createFeatures(content) {
-        var tileset = content._tileset;
         var featuresLength = content.featuresLength;
         if (!defined(content._features) && (featuresLength > 0)) {
             var features = new Array(featuresLength);
             for (var i = 0; i < featuresLength; ++i) {
-                features[i] = new Cesium3DTileFeature(tileset, content, i);
+                features[i] = new Cesium3DTileFeature(content, i);
             }
             content._features = features;
         }
