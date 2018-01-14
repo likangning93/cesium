@@ -2742,14 +2742,14 @@ define([
     /**
      * @private
      */
-    Scene.prototype.initializeFrame = function() {
+    Scene.prototype.initializeFrame = function(currentTime) {
         // Destroy released shaders once every 120 frames to avoid thrashing the cache
         if (this._shaderFrameCount++ === 120) {
             this._shaderFrameCount = 0;
             this._context.shaderCache.destroyReleasedShaderPrograms();
         }
 
-        this._tweens.update();
+        this._tweens.update(currentTime); // sync tweens with timeline
 
         this._screenSpaceCameraController.update();
         if (defined(this._deviceOrientationCameraController)) {

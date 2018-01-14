@@ -22,7 +22,8 @@ define([
         '../../Scene/SkyAtmosphere',
         '../../Scene/SkyBox',
         '../../Scene/Sun',
-        '../getElement'
+        '../getElement',
+        '../../Core/JulianDate'
     ], function(
         buildModuleUrl,
         Cartesian3,
@@ -47,7 +48,8 @@ define([
         SkyAtmosphere,
         SkyBox,
         Sun,
-        getElement) {
+        getElement,
+        JulianDate) {
     'use strict';
 
     function getDefaultSkyBoxUrl(suffix) {
@@ -702,8 +704,8 @@ define([
      */
     CesiumWidget.prototype.render = function() {
         if (this._canRender) {
-            this._scene.initializeFrame();
             var currentTime = this._clock.tick();
+            this._scene.initializeFrame(JulianDate.secondsDifference(currentTime, this._clock.startTime));
             this._scene.render(currentTime);
         } else {
             this._clock.tick();
