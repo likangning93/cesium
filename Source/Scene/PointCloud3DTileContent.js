@@ -2,6 +2,7 @@ define([
         '../Core/Cartesian2',
         '../Core/Cartesian3',
         '../Core/Cartesian4',
+        '../Core/ClippingPlaneCollection',
         '../Core/Color',
         '../Core/combine',
         '../Core/ComponentDatatype',
@@ -38,6 +39,7 @@ define([
         Cartesian2,
         Cartesian3,
         Cartesian4,
+        ClippingPlaneCollection,
         Color,
         combine,
         ComponentDatatype,
@@ -91,10 +93,10 @@ define([
      *
      * @private
      */
-    function PointCloud3DTileContent(tileset, tile, url, arrayBuffer, byteOffset) {
+    function PointCloud3DTileContent(tileset, tile, resource, arrayBuffer, byteOffset) {
         this._tileset = tileset;
         this._tile = tile;
-        this._url = url;
+        this._resource = resource;
 
         // Hold onto the payload until the render resources are created
         this._parsedContent = undefined;
@@ -158,6 +160,10 @@ define([
 
         this._packedClippingPlanes = [];
         this._modelViewMatrix = Matrix4.clone(Matrix4.IDENTITY);
+
+        this._clippingVolumesLength = 0;
+        this._clippingVolumesInside = undefined;
+        this._clippingVolumeTransforms = [];
 
         /**
          * @inheritdoc Cesium3DTileContent#featurePropertiesDirty
@@ -269,7 +275,7 @@ define([
          */
         url : {
             get : function() {
-                return this._url;
+                return this._resource.getUrlComponent(true);
             }
         },
 
@@ -570,6 +576,13 @@ define([
                 var style = Color.clone(clippingPlanes.edgeColor);
                 style.alpha = clippingPlanes.edgeWidth;
                 return style;
+            },
+            u_clipVolumeTransforms : function() {
+                if (!defined(content._clippingVolumeTransforms)) {
+                    return [];
+                }
+
+                return content._clippingVolumeTransforms;
             }
         };
 
@@ -866,7 +879,7 @@ define([
         var hasColorStyle = defined(colorStyleFunction);
         var hasShowStyle = defined(showStyleFunction);
         var hasPointSizeStyle = defined(pointSizeStyleFunction);
-        var hasClippedContent = defined(clippingPlanes) && clippingPlanes.enabled && content._tile._isClipped && !FeatureDetection.isInternetExplorer();
+        var hasClippedContent = defined(clippingPlanes) && clippingPlanes.enabled && content._tile._isClipped && ClippingPlaneCollection.isSupported();
 
         // Get the properties in use by the style
         var styleableProperties = [];
@@ -1097,10 +1110,25 @@ define([
 
         var fs = 'varying vec4 v_color; \n';
 
+
         if (hasClippedContent) {
-            fs += 'uniform int u_clippingPlanesLength;' +
+            fs += 'uniform int u_clippingPlanesLength; \n' +
                   'uniform vec4 u_clippingPlanes[czm_maxClippingPlanes]; \n' +
                   'uniform vec4 u_clippingPlanesEdgeStyle; \n';
+        }
+
+        var clippingVolumes = content._tileset.clippingVolumes;
+        var clippingVolumesLength = 0;
+        var hasClippingVolumes = defined(clippingVolumes) && defined(clippingVolumes.transforms);
+        if (hasClippingVolumes) {
+            clippingVolumesLength = clippingVolumes.transforms.length;
+        }
+
+        if (clippingVolumesLength > 0) {
+
+
+            fs +=   'const int length = ' + clippingVolumesLength + '; \n' +
+                    'uniform mat4 u_clipVolumeTransforms[length]; \n';
         }
 
         fs +=  'void main() \n' +
@@ -1119,6 +1147,26 @@ define([
                   '    } \n';
         }
 
+        if (clippingVolumesLength > 0) {
+            var inside = clippingVolumes.inside;
+            var operator = inside ? '&& !' : '|| ';
+
+            fs +=   '   mat4 transform; \n' +
+                    '   vec4 position; \n' +
+                    '   bool clipped = ' + inside + '; \n' +
+                    '   vec4 boxMin = vec4(-0.5, -0.5, -0.5, 1.0); \n' +
+                    '   vec4 boxMax = vec4(0.5, 0.5, 0.5, 1.0); \n' +
+                    '   for (int i = 0; i < length; ++i) \n' +
+                    '   { \n' +
+                    '      transform = u_clipVolumeTransforms[i]; \n' +
+                    '      vec4 min = boxMin; \n' +
+                    '      vec4 max = boxMax; \n' +
+                    '      position = transform * czm_windowToEyeCoordinates(gl_FragCoord); \n' + // position inside 1x1 cube
+                    '      clipped = clipped ' + operator + '(min.x < position.x && max.x > position.x && min.y < position.y && max.y > position.y && min.z < position.z && max.z > position.z); \n' + // check inside
+                    '   } \n' +
+                    '   if (clipped) discard; \n'
+        }
+
         fs += '} \n';
 
         var drawVS = vs;
@@ -1126,7 +1174,7 @@ define([
 
         if (hasBatchTable) {
             // Batched points always use the HIGHLIGHT color blend mode
-            drawVS = batchTable.getVertexShaderCallback(false, 'a_batchId')(drawVS);
+            drawVS = batchTable.getVertexShaderCallback(false, 'a_batchId', undefined)(drawVS);
             drawFS = batchTable.getFragmentShaderCallback(false, undefined)(drawFS);
         }
 
@@ -1174,12 +1222,11 @@ define([
     }
 
     function createFeatures(content) {
-        var tileset = content._tileset;
         var featuresLength = content.featuresLength;
         if (!defined(content._features) && (featuresLength > 0)) {
             var features = new Array(featuresLength);
             for (var i = 0; i < featuresLength; ++i) {
-                features[i] = new Cesium3DTileFeature(tileset, content, i);
+                features[i] = new Cesium3DTileFeature(content, i);
             }
             content._features = features;
         }
@@ -1287,6 +1334,33 @@ define([
         if (this._isClipped !== clippingEnabled || this._unionClippingRegions !== unionClippingRegions) {
             this._isClipped = clippingEnabled;
             this._unionClippingRegions = unionClippingRegions;
+
+            createShaders(this, frameState, tileset.style);
+        }
+
+        var clippingVolumes = this._tileset.clippingVolumes;
+        var clippingVolumesLength = 0;
+        var clippingVolumesInside = false;
+
+        if (defined(clippingVolumes) && defined(clippingVolumes.transforms)) {
+            clippingVolumesLength = clippingVolumes.transforms.length;
+            clippingVolumesInside = clippingVolumes.inside;
+
+            this._clippingVolumeTransforms.length = clippingVolumesLength;
+            for (var i = 0; i < clippingVolumesLength; ++i) {
+                if (!defined(this._clippingVolumeTransforms[i])) {
+                    this._clippingVolumeTransforms[i] = new Matrix4();
+                }
+
+                var result = this._clippingVolumeTransforms[i];
+                Matrix4.multiply(context.uniformState.view, clippingVolumes.transforms[i], result);
+                Matrix4.inverse(result, result);
+            }
+        }
+
+        if (clippingVolumesLength !== this._clippingVolumesLength || clippingVolumesInside !== this._clippingVolumesInside) {
+            this._clippingVolumesLength = clippingVolumesLength;
+            this._clippingVolumesInside = clippingVolumesInside;
 
             createShaders(this, frameState, tileset.style);
         }
