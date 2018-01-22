@@ -137,8 +137,8 @@ define([
         this._pointAttenuationMaxSize = 10.0;
 
         // TODO: figure out an approximation for this when tile.refine === Cesium3DTileRefine.ADD
-        var interpointDistance = tile.geometricError * 0.70710678118;
-        if (tile.children.length === 0) // leaf
+        var interpointDistance = defaultValue(tile.attenuationGeometricError, tile.geometricError) * 0.70710678118;
+        if (tile.children.length === 0 && defined(tile.parent)) // leaf
         {
             interpointDistance = tile.parent.geometricError * 0.5 * 0.70710678118;
         }

@@ -131,6 +131,7 @@ define([
          * @readonly
          */
         this.geometricError = header.geometricError;
+        this.attenuationGeometricError = undefined;
 
         if (!defined(this.geometricError)) {
             this.geometricError = defined(parent) ? parent.geometricError : tileset._geometricError;

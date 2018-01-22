@@ -116,6 +116,7 @@ define([
      * @param {Boolean} [options.debugShowRenderingStatistics=false] For debugging only. When true, draws labels to indicate the number of commands, points, triangles and features for each tile.
      * @param {Boolean} [options.debugShowMemoryUsage=false] For debugging only. When true, draws labels to indicate the texture and geometry memory in megabytes used by each tile.
      * @param {Boolean} [options.debugShowUrl=false] For debugging only. When true, draws labels to indicate the url of each tile.
+     * @param {Boolean} [options.leafAttenuationFix=false] TBA
      *
      * @exception {DeveloperError} The tileset must be 3D Tiles version 0.0 or 1.0.  See {@link https://github.com/AnalyticalGraphicsInc/3d-tiles#spec-status}
      *
@@ -741,6 +742,8 @@ define([
          */
         this.debugShowUrl = defaultValue(options.debugShowUrl, false);
 
+        this.leafAttenuationFix = defaultValue(options.leafAttenuationFix, false);
+
         var that = this;
 
         // We don't know the distance of the tileset until tileset.json is loaded, so use the default distance for now
@@ -1212,6 +1215,7 @@ define([
             var tile3D = tile.tile3D;
             var children = tile.header.children;
             if (defined(children)) {
+                var hasLeafChildren = false;
                 var length = children.length;
                 for (var i = 0; i < length; ++i) {
                     var childHeader = children[i];
@@ -1223,6 +1227,15 @@ define([
                         header : childHeader,
                         tile3D : childTile
                     });
+                    if (childTile.geometricError === 0.0) {
+                        hasLeafChildren = true;
+                    }
+                }
+                if (hasLeafChildren) {
+                    tile3D.attenuationGeometricError = tile3D.geometricError;
+                    if (this.leafAttenuationFix) {
+                        tile3D.geometricError /= 3.0;
+                    }
                 }
             }
 
