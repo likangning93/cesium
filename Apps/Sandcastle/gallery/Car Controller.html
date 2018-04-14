@@ -93,6 +93,8 @@ function computePositionAtTime(time, entity, result) {
     return Matrix4.multiplyByPoint(modelMatrix, centerOffset, result);
 }
 
+var ogFrontLeftModelMatrix = new Matrix4();
+
 function setup(time) {
     if (JulianDate.equals(time, previousTime)) {
         return;
@@ -107,6 +109,8 @@ function setup(time) {
     frontRightWheel = model.getNode(frontTireNodeNames[1]);
     backLeftWheel = model.getNode(rearTireNodeNames[0]);
     backRightWheel = model.getNode(rearTireNodeNames[1]);
+
+    Matrix4.clone(frontLeftWheel.matrix, ogFrontLeftModelMatrix);
 
     backLeftWheel.useMatrix = true;
     backRightWheel.useMatrix = true;
@@ -140,10 +144,16 @@ var frontRightWheelScratch = new Matrix4();
 
 var currentFrontAxlePosition = new Cartesian3();
 var previousFrontAxlePosition = new Cartesian3();
-var forwardScratch = new Cartesian3();
+var offsetScratch = new Cartesian3();
+var directionScratch = new Cartesian3();
+var inverseModelMatrixScratch = new Matrix4();
+
+var turnQuaternionScratch = new Quaternion();
+var turnMatrix3Scratch = new Matrix3();
+var turnMatrix4Scratch = new Matrix4();
 
 function update(time) {
-    computePositionAtTime(time, carEntity, currentPosition);
+    currentPosition = computePositionAtTime(time, carEntity, currentPosition);
 
     // If there hasn't been any movement, don't update wheels
     if (Cartesian3.equalsEpsilon(currentPosition, previousPosition, CesiumMath.EPSILON7)) {
@@ -160,21 +170,38 @@ function update(time) {
     var rotationMatrix = Matrix3.fromQuaternion(wheelRotationQuaternion, rotationMatrixScratch);
     var rotationMatrix4 = Matrix4.fromRotationTranslation(rotationMatrix, Cartesian3.ZERO, rotationMatrix4Scratch);
     backRightWheel.matrix = Matrix4.multiply(backRightWheel.matrix, rotationMatrix4, backRightWheelScratch);
-    frontRightWheelPreTurn = Matrix4.multiply(frontRightWheel.matrix, rotationMatrix4, frontRightWheelPreTurn);
 
     Quaternion.fromAxisAngle(Cartesian3.UNIT_Z, -rotationAngle, wheelRotationQuaternion);
     rotationMatrix = Matrix3.fromQuaternion(wheelRotationQuaternion, rotationMatrixScratch);
     rotationMatrix4 = Matrix4.fromRotationTranslation(rotationMatrix, Cartesian3.ZERO, rotationMatrix4Scratch);
 
     backLeftWheel.matrix = Matrix4.multiply(backLeftWheel.matrix, rotationMatrix4, backLeftWheelScratch);
-    frontLeftWheelPreTurn = Matrix4.multiply(frontLeftWheel.matrix, rotationMatrix4, frontLeftWheelPreTurn);
 
     // Computing the front/back wheel "turn:"
     // - compute "before" and "current" positions for the wheels in world space
     // - compute angle in local space to align with vector from before pt -> current pt
     // - this is a multiply that goes on the incremental rotation
-    var modelMatrix = entity.computeModelMatrix(time, modelMatrixScratch);
-    var offsetWC = Matrix4.multiplyByVector(modelMatrix, frontWheelOffset, forwardScratch);
+    var modelMatrix = carEntity.computeModelMatrix(time, modelMatrixScratch); // TODO: ughh
+    var offsetWC = Matrix4.multiplyByPointAsVector(modelMatrix, frontWheelOffset, offsetScratch);
+    currentFrontAxlePosition = Cartesian3.add(currentPosition, offsetWC, currentFrontAxlePosition);
+
+    var wheelDirectionWC = Cartesian3.subtract(currentFrontAxlePosition, previousFrontAxlePosition, directionScratch);
+
+    // Transform direction to local coordinates and come up with a rotation to match
+    var inverseModelMatrix = Matrix4.inverse(modelMatrix, inverseModelMatrixScratch);
+    var wheelDirectionMC = Matrix4.multiplyByPointAsVector(inverseModelMatrix, wheelDirectionWC, directionScratch);
+    wheelDirectionMC = Cartesian3.normalize(wheelDirectionMC, wheelDirectionMC);
+    var angle = Math.acos(wheelDirectionMC.y) - CesiumMath.PI_OVER_TWO; // SHAME. SHAME. SHAME. *ding a ling a ling*
+    var turnQuaternion = Quaternion.fromAxisAngle(Cartesian3.UNIT_Y, angle, turnQuaternionScratch);
+    var turnMatrix3 = Matrix3.fromQuaternion(turnQuaternion, turnMatrix3Scratch);
+    var turnmatrix4 = Matrix4.fromRotationTranslation(turnMatrix3, Cartesian3.ZERO, turnMatrix4Scratch);
+
+    // TODO: these rotations are incremental, so can't really compose them like you think.
+    // Probably better to track an ongoing "curr rotation" or something, as well as keep the
+    // origin
+    // Also, since this is timestamp based instead of deterministic, expect weirdness when you skip really far in time
+    var frontLeftWheelMatrix = Matrix4.multiply(turnmatrix4, rotationMatrix4, new Matrix4());
+    frontLeftWheel.matrix = Matrix4.multiply(ogFrontLeftModelMatrix, turnmatrix4, new Matrix4());
 
     Cartesian3.clone(currentFrontAxlePosition, previousFrontAxlePosition);
     Cartesian3.clone(currentDirection, previousDirection);
