@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no">
+    <meta name="description" content="Use Viewer to start building new applications or easily embed Cesium into existing applications.">
+    <meta name="cesium-sandcastle-labels" content="Beginner, Showcases">
+    <title>Cesium Demo</title>
+    <script type="text/javascript" src="../Sandcastle-header.js"></script>
+    <script type="text/javascript" src="../../../ThirdParty/requirejs-2.1.20/require.js"></script>
+    <script type="text/javascript">
+        if(typeof require === "function") {
+            require.config({
+                baseUrl : '../../../Source',
+                waitSeconds : 120
+            });
+        }
+    </script>
+</head>
+<body class="sandcastle-loading" data-sandcastle-bucket="bucket-requirejs.html">
+<style>
+    @import url(../templates/bucket.css);
+</style>
+<div id="cesiumContainer" class="fullSize"></div>
+<div id="loadingOverlay"><h1>Loading...</h1></div>
+<div id="toolbar"></div>
+<script id="cesium_sandcastle_script">
+function startup(Cesium) {
+    'use strict';
+//Sandcastle_Begin
+var viewer = new Cesium.Viewer('cesiumContainer', {
+    imageryProvider : Cesium.createTileMapServiceImageryProvider({
+        url : Cesium.buildModuleUrl('Assets/Textures/NaturalEarthII')
+    }),
+    baseLayerPicker : false,
+    geocoder : false
+});
+
+var carEntity;
+var readyForController = false;
+
+// Load CZML and get tracked entity
+var dataSourcePromise = viewer.dataSources.add(Cesium.CzmlDataSource.load('../../SampleData/dc_woods.czml'));
+dataSourcePromise.then(function(dataSource){
+    carEntity = dataSource.entities.getById('cesium car');
+    viewer.trackedEntity = carEntity;
+}).otherwise(function(error){
+    window.alert(error);
+});
+
+
+// fake requires
+var defined = Cesium.defined;
+var Cartesian3 = Cesium.Cartesian3;
+var CesiumMath = Cesium.Math;
+var JulianDate = Cesium.JulianDate;
+var Matrix3 = Cesium.Matrix3;
+var Matrix4 = Cesium.Matrix4;
+var Quaternion = Cesium.Quaternion;
+
+// some constants and keys
+var frontTireNodeNames = ['Tire_3', 'Tire_4'];
+var rearTireNodeNames = ['Tire', 'Tire_2'];
+var turnMaxAngle = 0.785398;
+var tireRadius = 0.37;
+var tireCircumference = CesiumMath.TWO_PI * tireRadius;
+var distanceToRotation = CesiumMath.TWO_PI / tireCircumference;
+var frontWheelOffset = new Cartesian3(3.75, 0.0, 0.0);
+var centerOffset = new Cartesian3(2.0, 0.0, 5.0);
+var stationarySpeed = 0.1; // As mps, less than 0.25 mph. Use to cull changes in rotation.
+
+// TODO: limited slip differential ability would be *excellent*
+// TODO: does basing wheel direction on drive direction instead of car orientation
+// enable drifting perhaps?
+var frontLeftWheel, frontRightWheel, backLeftWheel, backRightWheel;
+
+// Some state
+var turnAngle = 0;
+var previousPosition = new Cartesian3();
+var currentPosition = new Cartesian3();
+var previousDirection = new Cartesian3();
+var currentDirection = new Cartesian3();
+var previousTime = new JulianDate();
+
+var modelMatrixScratch = new Matrix4();
+var trackedPositionScratch = new Cartesian3();
+function computePositionAtTime(time, entity, result) {
+    var modelMatrix = entity.computeModelMatrix(time, modelMatrixScratch);
+    if (!defined(modelMatrix)) {
+        return undefined;
+    }
+    return Matrix4.multiplyByPoint(modelMatrix, centerOffset, result);
+}
+
+function setup(time) {
+    if (JulianDate.equals(time, previousTime)) {
+        return;
+    }
+
+    var model = viewer.scene.primitives.get(1); // TODO: should iter...
+    if (!defined(model) || !model.ready) {
+        return false;
+    }
+    // get nodes
+    frontLeftWheel = model.getNode(frontTireNodeNames[0]);
+    frontRightWheel = model.getNode(frontTireNodeNames[1]);
+    backLeftWheel = model.getNode(rearTireNodeNames[0]);
+    backRightWheel = model.getNode(rearTireNodeNames[1]);
+
+    backLeftWheel.useMatrix = true;
+    backRightWheel.useMatrix = true;
+
+    computePositionAtTime(time, carEntity, currentPosition);
+
+    var modelMatrix = carEntity.computeModelMatrix(time, modelMatrixScratch);
+    Matrix4.multiplyByPoint(modelMatrix, Cartesian3.ZERO, previousPosition);
+
+    Cartesian3.subtract(currentPosition, previousPosition, currentDirection);
+    Cartesian3.normalize(currentDirection, currentDirection);
+
+    Cartesian3.clone(currentDirection, previousDirection);
+    Cartesian3.clone(currentPosition, previousPosition);
+    JulianDate.clone(time, previousTime);
+
+    return true;
+}
+
+var wheelRotationQuaternion = new Quaternion();
+var rotationMatrixScratch = new Matrix3();
+var rotationMatrix4Scratch = new Matrix4();
+
+var backLeftWheelScratch = new Matrix4();
+var backRightWheelScratch = new Matrix4();
+
+var frontLeftWheelPreTurn = new Matrix4();
+var frontRightWheelPreTurn = new Matrix4();
+var frontLeftWheelScratch = new Matrix4();
+var frontRightWheelScratch = new Matrix4();
+
+var currentFrontAxlePosition = new Cartesian3();
+var previousFrontAxlePosition = new Cartesian3();
+var forwardScratch = new Cartesian3();
+
+function update(time) {
+    computePositionAtTime(time, carEntity, currentPosition);
+
+    // If there hasn't been any movement, don't update wheels
+    if (Cartesian3.equalsEpsilon(currentPosition, previousPosition, CesiumMath.EPSILON7)) {
+        return;
+    }
+
+    var distanceTravelled = Cartesian3.distance(previousPosition, currentPosition);
+    var elapsedTime = JulianDate.secondsDifference(time, previousTime);
+
+    var rotationAngle = distanceTravelled * distanceToRotation;
+
+    // Apply incremental rotation to each tire
+    Quaternion.fromAxisAngle(Cartesian3.UNIT_Z, rotationAngle, wheelRotationQuaternion);
+    var rotationMatrix = Matrix3.fromQuaternion(wheelRotationQuaternion, rotationMatrixScratch);
+    var rotationMatrix4 = Matrix4.fromRotationTranslation(rotationMatrix, Cartesian3.ZERO, rotationMatrix4Scratch);
+    backRightWheel.matrix = Matrix4.multiply(backRightWheel.matrix, rotationMatrix4, backRightWheelScratch);
+    frontRightWheelPreTurn = Matrix4.multiply(frontRightWheel.matrix, rotationMatrix4, frontRightWheelPreTurn);
+
+    Quaternion.fromAxisAngle(Cartesian3.UNIT_Z, -rotationAngle, wheelRotationQuaternion);
+    rotationMatrix = Matrix3.fromQuaternion(wheelRotationQuaternion, rotationMatrixScratch);
+    rotationMatrix4 = Matrix4.fromRotationTranslation(rotationMatrix, Cartesian3.ZERO, rotationMatrix4Scratch);
+
+    backLeftWheel.matrix = Matrix4.multiply(backLeftWheel.matrix, rotationMatrix4, backLeftWheelScratch);
+    frontLeftWheelPreTurn = Matrix4.multiply(frontLeftWheel.matrix, rotationMatrix4, frontLeftWheelPreTurn);
+
+    // Computing the front/back wheel "turn:"
+    // - compute "before" and "current" positions for the wheels in world space
+    // - compute angle in local space to align with vector from before pt -> current pt
+    // - this is a multiply that goes on the incremental rotation
+    var modelMatrix = entity.computeModelMatrix(time, modelMatrixScratch);
+    var offsetWC = Matrix4.multiplyByVector(modelMatrix, frontWheelOffset, forwardScratch);
+
+    Cartesian3.clone(currentFrontAxlePosition, previousFrontAxlePosition);
+    Cartesian3.clone(currentDirection, previousDirection);
+    Cartesian3.clone(currentPosition, previousPosition);
+    JulianDate.clone(time, previousTime);
+}
+
+viewer.scene.postRender.addEventListener(function(scene, time) { // eslint-disable-line no-unused-vars
+        if (readyForController) {
+            update(time);
+        } else if (defined(carEntity)) {
+            readyForController = setup(time);
+        }
+});
+
+//Sandcastle_End
+    Sandcastle.finishedLoading();
+}
+if (typeof Cesium !== "undefined") {
+    startup(Cesium);
+} else if (typeof require === "function") {
+    require(["Cesium"], startup);
+}
+</script>
+</body>
+</html>
