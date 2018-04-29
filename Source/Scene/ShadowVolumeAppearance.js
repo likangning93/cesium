@@ -8,10 +8,12 @@ define([
         '../Core/defaultValue',
         '../Core/defined',
         '../Core/defineProperties',
+        '../Core/Ellipsoid',
         '../Core/EncodedCartesian3',
         '../Core/GeometryInstanceAttribute',
         '../Core/Matrix2',
         '../Core/Matrix4',
+        '../Core/Plane',
         '../Core/Rectangle',
         '../Core/Transforms',
         '../Renderer/ShaderSource',
@@ -26,10 +28,12 @@ define([
         defaultValue,
         defined,
         defineProperties,
+        Ellipsoid,
         EncodedCartesian3,
         GeometryInstanceAttribute,
         Matrix2,
         Matrix4,
+        Plane,
         Rectangle,
         Transforms,
         ShaderSource,
@@ -87,7 +91,7 @@ define([
         //>>includeEnd('debug');
 
         var appearance = this._appearance;
-        var materialHookups = createShadowVolumeAppearanceFS(this._shaderDependencies, appearance, this._extentsCulling, this._planarExtents || columbusView2D);
+        var materialHookups = createShadowVolumeAppearanceFS(this._shaderDependencies, appearance, this._extentsCulling, this._planarExtents, columbusView2D);
         if (appearance instanceof PerInstanceColorAppearance) {
             return materialHookups;
         }
@@ -105,7 +109,7 @@ define([
         Check.typeOf.bool('columbusView2D', columbusView2D);
         //>>includeEnd('debug');
 
-        return getPickShaderFS(this._extentsCulling, this._planarExtents || columbusView2D);
+        return getPickShaderFS(this._extentsCulling, this._planarExtents, columbusView2D);
     };
 
     /**
@@ -124,9 +128,29 @@ define([
         return createShadowVolumeAppearanceVS(this._shaderDependencies, this._appearance, this._planarExtents, columbusView2D, vertexShaderSource);
     };
 
-    function createShadowVolumeAppearanceFS(shaderDependencies, appearance, extentsCull, planarExtents) {
+    function getTexcoordVaryings(planarExtents, columbusView2D) {
+        var glsl = '';
+        if (columbusView2D) {
+            glsl +=
+                'varying vec2 v_inversePlaneExtents;\n' +
+                'varying vec4 v_westPlane;\n' +
+                'varying vec4 v_southPlane;\n';
+        } else if (planarExtents) {
+            glsl +=
+                'varying vec4 v_northPlane;\n' +
+                'varying vec4 v_southPlane;\n' +
+                'varying vec4 v_eastPlane;\n' +
+                'varying vec4 v_westPlane;\n';
+        } else {
+            glsl +=
+                'varying vec4 v_sphericalExtents;\n';
+        }
+        return glsl;
+    }
+
+    function createShadowVolumeAppearanceFS(shaderDependencies, appearance, extentsCull, planarExtents, columbusView2D) {
         if (appearance instanceof PerInstanceColorAppearance) {
-            return getPerInstanceColorShaderFS(shaderDependencies, extentsCull, appearance.flat, planarExtents);
+            return getPerInstanceColorShaderFS(shaderDependencies, extentsCull, appearance.flat, planarExtents, columbusView2D);
         }
 
         var usesNormalEC = shaderDependencies.normalEC;
@@ -139,12 +163,7 @@ define([
             '#extension GL_EXT_frag_depth : enable\n' +
             '#endif\n';
         if (extentsCull || usesSt) {
-            glsl += planarExtents ?
-                'varying vec2 v_inversePlaneExtents;\n' +
-                'varying vec4 v_westPlane;\n' +
-                'varying vec4 v_southPlane;\n' :
-
-                'varying vec4 v_sphericalExtents;\n';
+            glsl += getTexcoordVaryings(planarExtents, columbusView2D);
         }
         if (usesSt) {
             glsl +=
@@ -152,14 +171,14 @@ define([
         }
 
         // Get local functions
-        glsl += getLocalFunctionsFS(shaderDependencies, planarExtents);
+        glsl += getLocalFunctionsFS(shaderDependencies, planarExtents, columbusView2D);
 
         glsl +=
             'void main(void)\n' +
             '{\n';
 
         // Compute material input stuff and cull if outside texture coordinate extents
-        glsl += getDependenciesAndCullingFS(shaderDependencies, extentsCull, planarExtents);
+        glsl += getDependenciesAndCullingFS(shaderDependencies, extentsCull, planarExtents, columbusView2D);
 
         glsl += '    czm_materialInput materialInput;\n';
         if (usesNormalEC) {
@@ -182,7 +201,7 @@ define([
         if (appearance.flat) {
             glsl += '    gl_FragColor = vec4(material.diffuse + material.emission, material.alpha);\n';
         } else {
-            glsl += '    gl_FragColor = czm_phong(normalize(-eyeCoordinate.xyz), material);\n';
+            glsl += '    gl_FragColor = gl_FragCoord.x / czm_viewport.z > 0.5 ? vec4(u, 0.0, 0.0, 1.0) : czm_phong(normalize(-eyeCoordinate.xyz), material); //vec4(u, v, 0.0, 1.0);\n';
         }
         glsl += '    czm_writeDepthClampedToFarPlane();\n';
         glsl += '}\n';
@@ -190,32 +209,27 @@ define([
     }
 
     var pickingShaderDependenciesScratch = new ShaderDependencies();
-    function getPickShaderFS(extentsCulling, planarExtents) {
+    function getPickShaderFS(extentsCulling, planarExtents, columbusView2D) {
         var glsl =
             '#ifdef GL_EXT_frag_depth\n' +
             '#extension GL_EXT_frag_depth : enable\n' +
             '#endif\n';
         if (extentsCulling) {
-            glsl += planarExtents ?
-                'varying vec2 v_inversePlaneExtents;\n' +
-                'varying vec4 v_westPlane;\n' +
-                'varying vec4 v_southPlane;\n' :
-
-                'varying vec4 v_sphericalExtents;\n';
+            glsl += getTexcoordVaryings(planarExtents, columbusView2D);
         }
         var shaderDependencies = pickingShaderDependenciesScratch;
         shaderDependencies.reset();
         shaderDependencies.requiresTextureCoordinates = extentsCulling;
         shaderDependencies.requiresNormalEC = false;
 
-        glsl += getLocalFunctionsFS(shaderDependencies, planarExtents);
+        glsl += getLocalFunctionsFS(shaderDependencies, planarExtents, columbusView2D);
 
         glsl += 'void main(void)\n' +
                 '{\n';
         glsl += '    bool culled = false;\n';
         var outOfBoundsSnippet =
                 '        culled = true;\n';
-        glsl += getDependenciesAndCullingFS(shaderDependencies, extentsCulling, planarExtents, outOfBoundsSnippet);
+        glsl += getDependenciesAndCullingFS(shaderDependencies, extentsCulling, planarExtents, columbusView2D, outOfBoundsSnippet);
         glsl += '    if (!culled) {\n' +
                 '        gl_FragColor.a = 1.0;\n' + // 0.0 alpha leads to discard from ShaderSource.createPickFragmentShaderSource
                 '        czm_writeDepthClampedToFarPlane();\n' +
@@ -224,27 +238,22 @@ define([
         return glsl;
     }
 
-    function getPerInstanceColorShaderFS(shaderDependencies, extentsCulling, flatShading, planarExtents) {
+    function getPerInstanceColorShaderFS(shaderDependencies, extentsCulling, flatShading, planarExtents, columbusView2D) {
         var glsl =
             '#ifdef GL_EXT_frag_depth\n' +
             '#extension GL_EXT_frag_depth : enable\n' +
             '#endif\n' +
             'varying vec4 v_color;\n';
         if (extentsCulling) {
-            glsl += planarExtents ?
-                'varying vec2 v_inversePlaneExtents;\n' +
-                'varying vec4 v_westPlane;\n' +
-                'varying vec4 v_southPlane;\n' :
-
-                'varying vec4 v_sphericalExtents;\n';
+            glsl += getTexcoordVaryings(planarExtents, columbusView2D);
         }
 
-        glsl += getLocalFunctionsFS(shaderDependencies, planarExtents);
+        glsl += getLocalFunctionsFS(shaderDependencies, planarExtents, columbusView2D);
 
         glsl += 'void main(void)\n' +
                 '{\n';
 
-        glsl += getDependenciesAndCullingFS(shaderDependencies, extentsCulling, planarExtents);
+        glsl += getDependenciesAndCullingFS(shaderDependencies, extentsCulling, planarExtents, columbusView2D);
 
         if (flatShading) {
             glsl +=
@@ -265,7 +274,7 @@ define([
         return glsl;
     }
 
-    function getDependenciesAndCullingFS(shaderDependencies, extentsCulling, planarExtents, outOfBoundsSnippet) {
+    function getDependenciesAndCullingFS(shaderDependencies, extentsCulling, planarExtents, columbusView2D, outOfBoundsSnippet) {
         var glsl = '';
         if (shaderDependencies.requiresEC) {
             glsl +=
@@ -277,11 +286,16 @@ define([
                 '    vec3 worldCoordinate = worldCoordinate4.xyz / worldCoordinate4.w;\n';
         }
         if (shaderDependencies.requiresTextureCoordinates) {
-            if (planarExtents) {
+            if (columbusView2D) {
                 glsl +=
-                '    // Unpack planes and transform to eye space\n' +
+                '    // Unpack planes and transform to eye space\n' + // TODO update comments...
                 '    float u = computePlanarTextureCoordinates(v_southPlane, eyeCoordinate.xyz / eyeCoordinate.w, v_inversePlaneExtents.y);\n' +
                 '    float v = computePlanarTextureCoordinates(v_westPlane, eyeCoordinate.xyz / eyeCoordinate.w, v_inversePlaneExtents.x);\n';
+            } else if (planarExtents) {
+                glsl +=
+                '    // Unpack planes and transform to eye space\n' +
+                '    float u = computePlanarTextureCoordinates(v_southPlane, v_northPlane, eyeCoordinate.xyz / eyeCoordinate.w);\n' +
+                '    float v = computePlanarTextureCoordinates(v_westPlane, v_eastPlane, eyeCoordinate.xyz / eyeCoordinate.w);\n';
             } else {
                 glsl +=
                 '    // Treat world coords as a sphere normal for spherical coordinates\n' +
@@ -293,7 +307,7 @@ define([
         if (extentsCulling) {
             if (!defined(outOfBoundsSnippet)) {
                 outOfBoundsSnippet =
-                '        discard;\n';
+                '        gl_FragColor = vec4(0.0, 0.0, 1.0, 1.0); return;//discard;\n';
             }
             glsl +=
                 '    if (u <= 0.0 || 1.0 <= u || v <= 0.0 || 1.0 <= v) {\n' +
@@ -312,7 +326,7 @@ define([
         return glsl;
     }
 
-    function getLocalFunctionsFS(shaderDependencies, planarExtents) {
+    function getLocalFunctionsFS(shaderDependencies, planarExtents, columbusView2D) {
         var glsl = '';
         if (shaderDependencies.requiresEC || shaderDependencies.requiresNormalEC) {
             glsl +=
@@ -361,10 +375,19 @@ define([
                 '    return (upOrRightEC - (eyeCoordinate.xyz / eyeCoordinate.w)) * useUpOrRight + ((eyeCoordinate.xyz / eyeCoordinate.w) - downOrLeftEC) * useDownOrLeft;\n' +
                 '}\n';
         }
-        if (shaderDependencies.requiresTextureCoordinates && planarExtents) {
+        if (shaderDependencies.requiresTextureCoordinates && columbusView2D) {
+            // 2D planar case just requires distance to a single plane
             glsl +=
                 'float computePlanarTextureCoordinates(vec4 plane, vec3 eyeCoordinates, float inverseExtent) {\n' +
                 '    return (dot(plane.xyz, eyeCoordinates) + plane.w) * inverseExtent;\n' +
+                '}\n';
+        } else if (shaderDependencies.requiresTextureCoordinates && planarExtents) {
+            // 3D planar case requires distance to a pair of planes centered at the origin of CBF
+            // compute distance to each plane, then compute 0-1 range as dist0 / (dist0 + dist1)
+            glsl +=
+                'float computePlanarTextureCoordinates(vec4 plane0, vec4 plane1, vec3 eyeCoordinates) {\n' +
+                '    float distance0 = dot(plane0.xyz, eyeCoordinates) + plane0.w;\n' +
+                '    return distance0 / (distance0 + dot(plane1.xyz, eyeCoordinates) + plane1.w);\n' +
                 '}\n';
         }
         return glsl;
@@ -378,19 +401,9 @@ define([
             glsl += 'varying vec4 v_color;\n';
         }
 
-        var spherical = !(planarExtents || columbusView2D);
         if (shaderDependencies.requiresTextureCoordinates) {
-            if (spherical) {
-                glsl +=
-                    'varying vec4 v_sphericalExtents;\n' +
-                    'varying vec4 v_stSineCosineUVScale;\n';
-            } else {
-                glsl +=
-                    'varying vec2 v_inversePlaneExtents;\n' +
-                    'varying vec4 v_westPlane;\n' +
-                    'varying vec4 v_southPlane;\n' +
-                    'varying vec4 v_stSineCosineUVScale;\n';
-            }
+            glsl += getTexcoordVaryings(planarExtents, columbusView2D);
+            glsl += 'varying vec4 v_stSineCosineUVScale;\n';
         }
 
         glsl +=
@@ -403,29 +416,18 @@ define([
 
         // Add code for computing texture coordinate dependencies
         if (shaderDependencies.requiresTextureCoordinates) {
-            if (spherical) {
+            // Two varieties of planar texcoords
+            if (columbusView2D) {
+                // 2D/CV case is in a 2D plane and thus only needs two planes, but may have very large "plane extents,"
+                // so planes and distances encoded as 3 64 bit positions,
+                // which in 2D can be encoded as 2 64 bit vec2s.
                 glsl +=
-                    'v_sphericalExtents = czm_batchTable_sphericalExtents(batchId);\n' +
-                    'v_stSineCosineUVScale = czm_batchTable_stSineCosineUVScale(batchId);\n';
-            } else {
-                // Two varieties of planar texcoords
-                if (columbusView2D) {
-                    // 2D/CV case may have very large "plane extents," so planes and distances encoded as 3 64 bit positions,
-                    // which in 2D can be encoded as 2 64 bit vec2s
-                    glsl +=
-                        'vec4 planes2D_high = czm_batchTable_planes2D_HIGH(batchId);\n' +
-                        'vec4 planes2D_low = czm_batchTable_planes2D_LOW(batchId);\n' +
-                        'vec3 southWestCorner = (czm_modelViewRelativeToEye * czm_translateRelativeToEye(vec3(0.0, planes2D_high.xy), vec3(0.0, planes2D_low.xy))).xyz;\n' +
-                        'vec3 northWestCorner = (czm_modelViewRelativeToEye * czm_translateRelativeToEye(vec3(0.0, planes2D_high.x, planes2D_high.z), vec3(0.0, planes2D_low.x, planes2D_low.z))).xyz;\n' +
-                        'vec3 southEastCorner = (czm_modelViewRelativeToEye * czm_translateRelativeToEye(vec3(0.0, planes2D_high.w, planes2D_high.y), vec3(0.0, planes2D_low.w, planes2D_low.y))).xyz;\n';
-                } else {
-                    glsl +=
-                        // 3D case has smaller "plane extents," so planes encoded as a 64 bit position and 2 vec3s for distances/direction
-                        'vec3 southWestCorner = (czm_modelViewRelativeToEye * czm_translateRelativeToEye(czm_batchTable_southWest_HIGH(batchId), czm_batchTable_southWest_LOW(batchId))).xyz;\n' +
-                        'vec3 northWestCorner = czm_normal * czm_batchTable_northward(batchId) + southWestCorner;\n' +
-                        'vec3 southEastCorner = czm_normal * czm_batchTable_eastward(batchId) + southWestCorner;\n';
-                }
-                glsl +=
+                    'vec4 planes2D_high = czm_batchTable_planes2D_HIGH(batchId);\n' +
+                    'vec4 planes2D_low = czm_batchTable_planes2D_LOW(batchId);\n' +
+                    'vec3 southWestCorner = (czm_modelViewRelativeToEye * czm_translateRelativeToEye(vec3(0.0, planes2D_high.xy), vec3(0.0, planes2D_low.xy))).xyz;\n' +
+                    'vec3 northWestCorner = (czm_modelViewRelativeToEye * czm_translateRelativeToEye(vec3(0.0, planes2D_high.x, planes2D_high.z), vec3(0.0, planes2D_low.x, planes2D_low.z))).xyz;\n' +
+                    'vec3 southEastCorner = (czm_modelViewRelativeToEye * czm_translateRelativeToEye(vec3(0.0, planes2D_high.w, planes2D_high.y), vec3(0.0, planes2D_low.w, planes2D_low.y))).xyz;\n' +
+
                     'vec3 eastWard = southEastCorner - southWestCorner;\n' +
                     'float eastExtent = length(eastWard);\n' +
                     'eastWard /= eastExtent;\n' +
@@ -436,9 +438,19 @@ define([
 
                     'v_westPlane = vec4(eastWard, -dot(eastWard, southWestCorner));\n' +
                     'v_southPlane = vec4(northWard, -dot(northWard, southWestCorner));\n' +
-                    'v_inversePlaneExtents = vec2(1.0 / eastExtent, 1.0 / northExtent);\n' +
-                    'v_stSineCosineUVScale = czm_batchTable_stSineCosineUVScale(batchId);\n';
+                    'v_inversePlaneExtents = vec2(1.0 / eastExtent, 1.0 / northExtent);\n';
+            } else if (planarExtents) {
+                glsl +=
+                    // 3D case has 4 planes centered at the origin in world space
+                    'vec4 eastWest = czm_batchTable_eastWestPlanes(batchId);\n' +
+                    'v_northPlane = czm_transformPlane(czm_batchTable_northPlane(batchId), czm_modelView);\n' +
+                    'v_southPlane = czm_transformPlane(czm_batchTable_southPlane(batchId), czm_modelView);\n' +
+                    'v_eastPlane = czm_transformPlane(vec4(eastWest.xy, 0.0, 0.0), czm_modelView);\n' +
+                    'v_westPlane = czm_transformPlane(vec4(eastWest.zw, 0.0, 0.0), czm_modelView);\n';
+            } else {
+                glsl += 'v_sphericalExtents = czm_batchTable_sphericalExtents(batchId);\n';
             }
+            glsl += 'v_stSineCosineUVScale = czm_batchTable_stSineCosineUVScale(batchId);\n';
         }
 
         glsl +=
@@ -700,100 +712,114 @@ define([
         });
     }
 
-    var enuMatrixScratch = new Matrix4();
-    var inverseEnuScratch = new Matrix4();
-    var rectanglePointCartesianScratch = new Cartesian3();
-    var pointsCartographicScratch = [
-        new Cartographic(),
-        new Cartographic(),
-        new Cartographic(),
-        new Cartographic(),
-        new Cartographic(),
-        new Cartographic(),
-        new Cartographic(),
-        new Cartographic()
-    ];
-    /**
-     * When computing planes to bound the rectangle,
-     * need to factor in "bulge" and other distortion.
-     * Flatten the ellipsoid-centered corners and edge-centers of the rectangle
-     * into the plane of the local ENU system, compute bounds in 2D, and
-     * project back to ellipsoid-centered.
-     */
-    function computeRectangleBounds(rectangle, ellipsoid, southWestCornerResult, eastVectorResult, northVectorResult) {
-        // Compute center of rectangle
-        var centerCartographic = Rectangle.center(rectangle, rectangleCenterScratch);
-        var centerCartesian = Cartographic.toCartesian(centerCartographic, ellipsoid, rectanglePointCartesianScratch);
-        var enuMatrix = Transforms.eastNorthUpToFixedFrame(centerCartesian, ellipsoid, enuMatrixScratch);
-        var inverseEnu = Matrix4.inverse(enuMatrix, inverseEnuScratch);
-
-        var west = rectangle.west;
-        var east = rectangle.east;
-        var north = rectangle.north;
-        var south = rectangle.south;
-
-        var cartographics = pointsCartographicScratch;
-        cartographics[0].latitude = south;
-        cartographics[0].longitude = west;
-        cartographics[1].latitude = north;
-        cartographics[1].longitude = west;
-        cartographics[2].latitude = north;
-        cartographics[2].longitude = east;
-        cartographics[3].latitude = south;
-        cartographics[3].longitude = east;
-
-        var longitudeCenter = (west + east) * 0.5;
-        var latitudeCenter = (north + south) * 0.5;
-
-        cartographics[4].latitude = south;
-        cartographics[4].longitude = longitudeCenter;
-        cartographics[5].latitude = north;
-        cartographics[5].longitude = longitudeCenter;
-        cartographics[6].latitude = latitudeCenter;
-        cartographics[6].longitude = west;
-        cartographics[7].latitude = latitudeCenter;
-        cartographics[7].longitude = east;
-
-        var minX = Number.POSITIVE_INFINITY;
-        var maxX = Number.NEGATIVE_INFINITY;
-        var minY = Number.POSITIVE_INFINITY;
-        var maxY = Number.NEGATIVE_INFINITY;
-        for (var i = 0; i < 8; i++) {
-            var pointCartesian = Cartographic.toCartesian(cartographics[i], ellipsoid, rectanglePointCartesianScratch);
-            Matrix4.multiplyByPoint(inverseEnu, pointCartesian, pointCartesian);
-            pointCartesian.z = 0.0; // flatten into XY plane of ENU coordinate system
-            minX = Math.min(minX, pointCartesian.x);
-            maxX = Math.max(maxX, pointCartesian.x);
-            minY = Math.min(minY, pointCartesian.y);
-            maxY = Math.max(maxY, pointCartesian.y);
+    var longitudinalCartographicScratch = new Cartographic();
+    var longitudinalCartesianScratch = new Cartesian3();
+    function computeLongitudeTangentNormal(longitude, ellipsoid, invert, result) {
+        var cartographic = longitudinalCartographicScratch;
+        cartographic.height = 0.0;
+        cartographic.latitude = 0.0;
+        cartographic.longitude = longitude;
+        var cartesian = Cartographic.toCartesian(cartographic, ellipsoid, longitudinalCartesianScratch);
+        var out = Cartesian3.normalize(cartesian, cartesian);
+        Cartesian3.cross(out, Cartesian3.UNIT_Z, result);
+        if (invert) {
+            Cartesian3.multiplyByScalar(result, -1.0, result);
         }
-
-        var southWestCorner = southWestCornerResult;
-        southWestCorner.x = minX;
-        southWestCorner.y = minY;
-        southWestCorner.z = 0.0;
-        Matrix4.multiplyByPoint(enuMatrix, southWestCorner, southWestCorner);
-
-        var southEastCorner = eastVectorResult;
-        southEastCorner.x = maxX;
-        southEastCorner.y = minY;
-        southEastCorner.z = 0.0;
-        Matrix4.multiplyByPoint(enuMatrix, southEastCorner, southEastCorner);
-        // make eastward vector
-        Cartesian3.subtract(southEastCorner, southWestCorner, eastVectorResult);
-
-        var northWestCorner = northVectorResult;
-        northWestCorner.x = minX;
-        northWestCorner.y = maxY;
-        northWestCorner.z = 0.0;
-        Matrix4.multiplyByPoint(enuMatrix, northWestCorner, northWestCorner);
-        // make eastward vector
-        Cartesian3.subtract(northWestCorner, southWestCorner, northVectorResult);
+        return result;
     }
 
-    var eastwardScratch = new Cartesian3();
-    var northwardScratch = new Cartesian3();
-    var encodeScratch = new EncodedCartesian3();
+    var eastPositionScratch = new Cartesian3();
+    var westPositionScratch = new Cartesian3();
+    var rightVectorScratch = new Cartesian3();
+    function computeSingleLatitudeTangentNormal(east, west, latitude, ellipsoid, invert, result) {
+        // Compute normal for a plane such that the midpoint of long1 and long2 with latitude is in the plane.
+        // Use for:
+        // * South plane when South is above the equator
+        // * North plane when North is below the equator
+        var eastCarto = cartographicScratch;
+        eastCarto.longitude = east;
+        eastCarto.latitude = latitude;
+        eastCarto.height = 0.0;
+        var eastPosition = Cartographic.toCartesian(eastCarto, ellipsoid, eastPositionScratch);
+
+        var westCarto = cartographicScratch;
+        westCarto.longitude = west;
+        westCarto.latitude = latitude;
+        westCarto.height = 0.0;
+        var westPosition = Cartographic.toCartesian(westCarto, ellipsoid, westPositionScratch);
+
+        var rightVector = Cartesian3.subtract(eastPosition, westPosition, rightVectorScratch);
+        rightVector = Cartesian3.normalize(rightVector, rightVector);
+
+        var centerCarto = cartographicScratch;
+        centerCarto.longitude = (east + west) * 0.5;
+        centerCarto.latitude = latitude;
+        centerCarto.height = 0.0;
+        var outPosition = Cartographic.toCartesian(centerCarto, ellipsoid, westPositionScratch);
+        var outVector = ellipsoid.geodeticSurfaceNormalCartographic(westCarto, new Cartesian3());
+
+        // TODO: see if Ellipsoid.prototype.geodeticSurfaceNormalCartographic gives better results
+        // Requires a distance to the plane as well.
+
+        Cartesian3.cross(outVector, rightVector, result);
+        Cartesian3.normalize(result, result);
+        var plane = Plane.fromPointNormal(westPosition, result);
+
+        if (invert) {
+            Cartesian3.multiplyByScalar(result, -1.0, result);
+            plane.distance *= -1.0;
+        }
+        return plane.distance;
+    }
+
+    function computeDoubleLatitudeTangentNormal(east, west, latitude, ellipsoid, invert, result) {
+        // Compute normal for a plane such that east and west with latitude are in the plane.
+        // Use for:
+        // * both planes when the rectangle straddles the equator
+        // * North plane when South is above the equator
+        // * South plane when North is below the equator
+        var eastCarto = cartographicScratch;
+        eastCarto.longitude = east;
+        eastCarto.latitude = latitude;
+        eastCarto.height = 0.0;
+        var eastPosition = Cartographic.toCartesian(eastCarto, ellipsoid, eastPositionScratch);
+
+        var westCarto = cartographicScratch;
+        westCarto.longitude = west;
+        westCarto.latitude = latitude;
+        westCarto.height = 0.0;
+        var westPosition = Cartographic.toCartesian(westCarto, ellipsoid, westPositionScratch);
+
+        var rightVector = Cartesian3.subtract(eastPosition, westPosition, rightVectorScratch);
+        rightVector = Cartesian3.normalize(rightVector, rightVector);
+/*
+        var outVector = Cartesian3.normalize(westPosition, westPosition);
+        console.log(JSON.stringify(outVector));
+
+        var modelView = {"0":-0.8289827533242462,"1":0.2183784027932938,"2":-0.5148771386305688,"3":0,"4":-0.1406767111396828,"5":-0.9724367481587494,"6":-0.18594847074756904,"7":0,"8":-0.5412925804349016,"9":-0.0817168527531937,"10":0.836854048411214,"11":0,"12":-0.09858469665050507,"13":-2750685.723301648,"14":-5745102.184897642,"15":1};
+        var testPlane = new Plane(outVector, 0.0);
+        testPlane = Plane.transform(testPlane, modelView);
+*/
+        var outVector = ellipsoid.geodeticSurfaceNormalCartographic(westCarto, new Cartesian3());
+
+        // TODO: see if Ellipsoid.prototype.geodeticSurfaceNormalCartographic gives better results
+        // Requires a distance to the plane as well.
+
+        Cartesian3.cross(outVector, rightVector, result);
+        Cartesian3.normalize(result, result);
+        var plane = Plane.fromPointNormal(westPosition, result);
+
+        if (invert) {
+            Cartesian3.multiplyByScalar(result, -1.0, result);
+            plane.distance *= -1.0;
+        }
+
+        //var modelView = {"0":-0.8289827533242462,"1":0.2183784027932938,"2":-0.5148771386305688,"3":0,"4":-0.1406767111396828,"5":-0.9724367481587494,"6":-0.18594847074756904,"7":0,"8":-0.5412925804349016,"9":-0.0817168527531937,"10":0.836854048411214,"11":0,"12":-0.09858469665050507,"13":-2750685.723301648,"14":-5745102.184897642,"15":1};
+        //var testPlane = Plane.transform(plane, modelView);
+
+        return plane.distance;
+    }
+
     /**
      * Gets an attributes object containing:
      * - 3 high-precision points as 6 GeometryInstanceAttributes. These points are used to compute eye-space planes.
@@ -819,40 +845,62 @@ define([
         Check.typeOf.object('projection', projection);
         //>>includeEnd('debug');
 
-        var corner = cornerScratch;
-        var eastward = eastwardScratch;
-        var northward = northwardScratch;
-        computeRectangleBounds(rectangle, ellipsoid, corner, eastward, northward);
+        var west = rectangle.west;
+        var east = rectangle.east;
+        var south = rectangle.south;
+        var north = rectangle.north;
+
+        // Get a plane for each dimension of the rectangle
+        // These planes are Z 0.0, so pack them to a single vec4
+        var westPlane = computeLongitudeTangentNormal(west, ellipsoid, true, new Cartesian3());
+        var eastPlane = computeLongitudeTangentNormal(east, ellipsoid, false, new Cartesian3());
+        var northPlane = new Cartesian3();
+        var southPlane = new Cartesian3();
+        var northDistance = 0.0;
+        var southDistance = 0.0;
+
+        if (south > 0.0) {
+            northDistance = computeDoubleLatitudeTangentNormal(east, west, north, ellipsoid, true, northPlane);
+            southDistance = computeSingleLatitudeTangentNormal(east, west, south, ellipsoid, false, southPlane);
+        } else if (north < 0.0) {
+            northDistance = computeSingleLatitudeTangentNormal(east, west, north, ellipsoid, true, northPlane);
+            southDistance = computeDoubleLatitudeTangentNormal(east, west, south, ellipsoid, false, southPlane);
+        } else {
+            northDistance = computeDoubleLatitudeTangentNormal(east, west, north, ellipsoid, true, northPlane);
+            southDistance = computeDoubleLatitudeTangentNormal(east, west, south, ellipsoid, false, southPlane);
+        }
+
+        var eastWestAttribute = new GeometryInstanceAttribute({
+            componentDatatype: ComponentDatatype.FLOAT,
+            componentsPerAttribute: 4,
+            normalize: false,
+            value : [eastPlane.x, eastPlane.y, westPlane.x, westPlane.y]
+        });
+
+        //console.log(eastWestAttribute.value);
+        //console.log('north: ' + northPlane);
+        //console.log('south: ' + southPlane);
+
+        var northAttribute = new GeometryInstanceAttribute({
+            componentDatatype: ComponentDatatype.FLOAT,
+            componentsPerAttribute: 4,
+            normalize: false,
+            value : [northPlane.x, northPlane.y, northPlane.z, northDistance]
+        });
+
+        var southAttribute = new GeometryInstanceAttribute({
+            componentDatatype: ComponentDatatype.FLOAT,
+            componentsPerAttribute: 4,
+            normalize: false,
+            value : [southPlane.x, southPlane.y, southPlane.z, southDistance]
+        });
 
         var attributes = {
+            eastWestPlanes : eastWestAttribute,
+            northPlane : northAttribute,
+            southPlane : southAttribute,
             stSineCosineUVScale : getTextureCoordinateRotationAttribute(rectangle, ellipsoid, textureCoordinateRotation)
         };
-
-        var encoded = EncodedCartesian3.fromCartesian(corner, encodeScratch);
-        attributes.southWest_HIGH = new GeometryInstanceAttribute({
-            componentDatatype: ComponentDatatype.FLOAT,
-            componentsPerAttribute: 3,
-            normalize: false,
-            value : Cartesian3.pack(encoded.high, [0, 0, 0])
-        });
-        attributes.southWest_LOW = new GeometryInstanceAttribute({
-            componentDatatype: ComponentDatatype.FLOAT,
-            componentsPerAttribute: 3,
-            normalize: false,
-            value : Cartesian3.pack(encoded.low, [0, 0, 0])
-        });
-        attributes.eastward = new GeometryInstanceAttribute({
-            componentDatatype: ComponentDatatype.FLOAT,
-            componentsPerAttribute: 3,
-            normalize: false,
-            value : Cartesian3.pack(eastward, [0, 0, 0])
-        });
-        attributes.northward = new GeometryInstanceAttribute({
-            componentDatatype: ComponentDatatype.FLOAT,
-            componentsPerAttribute: 3,
-            normalize: false,
-            value : Cartesian3.pack(northward, [0, 0, 0])
-        });
 
         add2DTextureCoordinateAttributes(rectangle, projection, attributes);
         return attributes;
@@ -936,8 +984,8 @@ define([
     };
 
     ShadowVolumeAppearance.hasAttributesForTextureCoordinatePlanes = function(attributes) {
-        return defined(attributes.southWest_HIGH) && defined(attributes.southWest_LOW) &&
-            defined(attributes.northward) && defined(attributes.eastward) &&
+        return defined(attributes.eastWestPlanes) &&
+            defined(attributes.northPlane) && defined(attributes.southPlane) &&
             defined(attributes.planes2D_HIGH) && defined(attributes.planes2D_LOW) &&
             defined(attributes.stSineCosineUVScale);
     };
