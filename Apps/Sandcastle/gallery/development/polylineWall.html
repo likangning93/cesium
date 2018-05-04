@@ -47,20 +47,14 @@ var cartographics = [
     Cesium.Cartographic.fromDegrees(-4, 8, 0.0),
     Cesium.Cartographic.fromDegrees(-8, 8, 0.0)
 ];
-
+/*
 // Create geometries.
-var geometries = Cesium.GroundPolylinePrimitive._createGeometries(viewer.scene.globe.ellipsoid, cartographics);
+var geometryInstances = Cesium.PolylineShadowVolume._createGeometryInstances(viewer.scene.globe.ellipsoid, cartographics);
 
-var geometryCount = geometries.length;
-var geometryInstances = [];
-Cesium.Math.setRandomNumberSeed(137);
-for (var i = 0; i < geometryCount; i++) {
-    geometryInstances.push(new Cesium.GeometryInstance({
-        geometry : geometries[i],
-        attributes : {
-            color : Cesium.ColorGeometryInstanceAttribute.fromColor(Cesium.Color.RED)
-        }
-    }));
+var geometryInstancesCount = geometryInstances.length;
+for (var i = 0; i < geometryInstancesCount; i++) {
+    var geometryInstance = geometryInstances[i];
+    geometryInstance.attributes.color = Cesium.ColorGeometryInstanceAttribute.fromColor(Cesium.Color.RED);
 }
 
 // Add the geometry instance to primitives.
@@ -71,6 +65,10 @@ scene.primitives.add(new Cesium.Primitive({
     }),
     asynchronous : false
 }));
+*/
+
+scene.primitives.add(new Cesium.GroundPolylinePrimitive(scene.globe.ellipsoid, cartographics));
+
 //Sandcastle_End
     Sandcastle.finishedLoading();
 }
