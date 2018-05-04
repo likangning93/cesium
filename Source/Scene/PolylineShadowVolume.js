@@ -11,7 +11,13 @@ define([
     '../Core/GeometryAttribute',
     '../Core/GeometryAttributes',
     '../Core/GeometryInstance',
-    '../Core/GeometryInstanceAttribute'
+    '../Core/GeometryInstanceAttribute',
+    '../Shaders/PolylineShadowVolumeVS',
+    '../Shaders/PolylineShadowVolumeFS',
+    '../Renderer/RenderState',
+    './BlendingState',
+    './MaterialAppearance',
+    './Primitive'
 ], function(
     BoundingSphere,
     Cartesian2,
@@ -25,7 +31,13 @@ define([
     GeometryAttribute,
     GeometryAttributes,
     GeometryInstance,
-    GeometryInstanceAttribute
+    GeometryInstanceAttribute,
+    PolylineShadowVolumeVS,
+    PolylineShadowVolumeFS,
+    RenderState,
+    BlendingState,
+    MaterialAppearance,
+    Primitive
 ) {
     'use strict';
 
@@ -241,7 +253,7 @@ define([
 
     function PolylineShadowVolume() {}
 
-    PolylineShadowVolume._createGeometryInstances = function(ellipsoid, cartographics) {
+    function createGeometryInstances(ellipsoid, cartographics) {
         var cartoCount = cartographics.length;
         var geometryInstances = [];
         for (var i = 0; i < cartoCount - 1; i++) {
@@ -260,7 +272,40 @@ define([
             geometryInstances.push(createWallSegment(ellipsoid, start, end, minimumHeight, maximumHeight, preStart, postEnd));
         }
         return geometryInstances;
+    }
+
+    PolylineShadowVolume._createGeometryInstances = function(ellipsoid, cartographics) {
+        return createGeometryInstances(ellipsoid, cartographics);
     };
+
+    function getColorRenderState() {
+        return {
+            depthTest : {
+                enabled : false
+            },
+            depthMask : false, // ?
+            blending : BlendingState.ALPHA_BLEND
+        };
+    }
+
+    PolylineShadowVolume.getPrimitive = function(ellipsoid, cartographics) {
+        var geometryInstances = createGeometryInstances(ellipsoid, cartographics);
+        var material = new MaterialAppearance({
+            flat : true,
+            translucent : true,
+            closed : false,
+            materialSupport : MaterialAppearance.MaterialSupport.BASIC,
+            vertexShaderSource : PolylineShadowVolumeVS,
+            fragmentShaderSource : PolylineShadowVolumeFS,
+            renderState : RenderState.fromCache(getColorRenderState())
+        });
+        return new Primitive({
+            geometryInstances : geometryInstances,
+            appearance : material,
+            asynchronous : false,
+            compressVertices : false // otherwise normals will be weird
+        });
+    }
 
     /**
      * Create Geometry for a mitered wall formed from the given line segment.

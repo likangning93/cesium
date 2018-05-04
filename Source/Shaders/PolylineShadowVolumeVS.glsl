@@ -1,7 +1,7 @@
 attribute vec3 position3DHigh;
 attribute vec3 position3DLow;
 attribute float batchId;
-attribute vec3 a_normal;
+attribute vec3 normal;
 
 varying vec3 v_ecStart;
 varying vec3 v_ecEnd;
@@ -18,6 +18,6 @@ void main()
     v_ecNormal = czm_normal * vec3(startHi_andNormalX.w, startLo_andNormalY.w, offset_andNormalZ.w);
 
     vec4 positionRelativeToEye = czm_computePosition();
-    positionRelativeToEye.xyz += 10000.0 * a_normal;
+    positionRelativeToEye.xyz += 10000.0 * normal;
     gl_Position = czm_depthClampFarPlane(czm_modelViewProjectionRelativeToEye * positionRelativeToEye);
 }

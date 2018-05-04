@@ -67,7 +67,7 @@ scene.primitives.add(new Cesium.Primitive({
 }));
 */
 
-scene.primitives.add(new Cesium.GroundPolylinePrimitive(scene.globe.ellipsoid, cartographics));
+scene.primitives.add(Cesium.PolylineShadowVolume.getPrimitive(scene.globe.ellipsoid, cartographics));
 
 //Sandcastle_End
     Sandcastle.finishedLoading();
