@@ -89,37 +89,36 @@ define([
         var encodedStart = EncodedCartesian3.fromCartesian(startCartesian, encodeScratch);
         var offset = Cartesian3.subtract(endCartesian, startCartesian, offsetScratch);
 
-        // Compute a local normal describing a plane that contains both start and end
+        // Compute local forward and right vectors
         var out = Cartesian3.normalize(startCartesian, normal1Scratch);
         var forward = Cartesian3.normalize(offset, normal2Scratch);
         var right = Cartesian3.cross(forward, out, normal1Scratch);
-        var up = Cartesian3.cross(right, forward, normal1Scratch);
 
-        var startHi_andNormalX_Attribute = new GeometryInstanceAttribute({
+        var startHi_andRightX_Attribute = new GeometryInstanceAttribute({
             componentDatatype: ComponentDatatype.FLOAT,
             componentsPerAttribute: 4,
             normalize: false,
-            value : Cartesian3.pack(encodedStart.high, [0, 0, 0, up.x])
+            value : Cartesian3.pack(encodedStart.high, [0, 0, 0, right.x])
         });
 
-        var startLo_andNormalY_Attribute = new GeometryInstanceAttribute({
+        var startLo_andRightY_Attribute = new GeometryInstanceAttribute({
             componentDatatype: ComponentDatatype.FLOAT,
             componentsPerAttribute: 4,
             normalize: false,
-            value : Cartesian3.pack(encodedStart.low, [0, 0, 0, up.y])
+            value : Cartesian3.pack(encodedStart.low, [0, 0, 0, right.y])
         });
 
-        var offset_andNormalZ_Attribute = new GeometryInstanceAttribute({
+        var offset_andRightZ_Attribute = new GeometryInstanceAttribute({
             componentDatatype: ComponentDatatype.FLOAT,
             componentsPerAttribute: 4,
             normalize: false,
-            value : Cartesian3.pack(offset, [0, 0, 0, up.z])
+            value : Cartesian3.pack(offset, [0, 0, 0, right.z])
         })
 
         return {
-            startHi_andNormalX : startHi_andNormalX_Attribute,
-            startLo_andNormalY : startLo_andNormalY_Attribute,
-            offset_andNormalZ : offset_andNormalZ_Attribute
+            startHi_andRightX : startHi_andRightX_Attribute,
+            startLo_andRightY : startLo_andRightY_Attribute,
+            offset_andRightZ : offset_andRightZ_Attribute
         };
     }
 
@@ -267,7 +266,7 @@ define([
             if (i + 2 < cartoCount) {
                 postEnd = cartographics[i + 2];
             }
-            var minimumHeight = 0.0;// -i * 10000.0;
+            var minimumHeight = -100.0;// 100000.0;// -i * 10000.0;
             var maximumHeight = 200000;// (i + 1) * 20000.0;
             geometryInstances.push(createWallSegment(ellipsoid, start, end, minimumHeight, maximumHeight, preStart, postEnd));
         }
@@ -283,7 +282,7 @@ define([
             depthTest : {
                 enabled : false
             },
-            depthMask : false, // ?
+            //depthMask : false, // ?
             blending : BlendingState.ALPHA_BLEND
         };
     }

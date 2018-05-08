@@ -29,14 +29,34 @@ function startup(Cesium) {
 //Sandcastle_Begin
 // Create the viewer.
 var viewer = new Cesium.Viewer('cesiumContainer', {
-    imageryProvider : Cesium.createTileMapServiceImageryProvider({
+    /*imageryProvider : Cesium.createTileMapServiceImageryProvider({
         url : Cesium.buildModuleUrl('Assets/Textures/NaturalEarthII')
-    })
+    })*/
 });
 viewer.extend(Cesium.viewerCesiumInspectorMixin);
 
 var scene = viewer.scene;
 
+var rightHandler = new Cesium.ScreenSpaceEventHandler(scene.canvas);
+rightHandler.setInputAction(function(movement) {
+    var cartesian = viewer.scene.pickPosition(movement.position);
+    if (cartesian) {
+        var cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+        var lat = Cesium.Math.toDegrees(cartographic.latitude);
+        var long = Cesium.Math.toDegrees(cartographic.longitude);
+        console.log('Cesium.Cartographic.fromDegrees(' + long + ', ' + lat + ')');
+    }
+}, Cesium.ScreenSpaceEventType.RIGHT_CLICK);
+
+var cartographics = [
+    Cesium.Cartographic.fromDegrees(-112.1340164450331, 36.05494287836128),
+    Cesium.Cartographic.fromDegrees(-112.08821010582645, 36.097804071380715),
+    Cesium.Cartographic.fromDegrees(-112.13296079730024, 36.168769146801104),
+    Cesium.Cartographic.fromDegrees(-112.10828895143331, 36.20031318533197)
+];
+
+/*
+// Early test for mitering
 var cartographics = [
     Cesium.Cartographic.fromDegrees(0, 0, 0.0),
     Cesium.Cartographic.fromDegrees(2, 2, 0.0),
@@ -46,9 +66,10 @@ var cartographics = [
     Cesium.Cartographic.fromDegrees(-4, 6, 0.0),
     Cesium.Cartographic.fromDegrees(-4, 8, 0.0),
     Cesium.Cartographic.fromDegrees(-8, 8, 0.0)
-];
+];*/
+
 /*
-// Create geometries.
+// Create geometries with boring shading
 var geometryInstances = Cesium.PolylineShadowVolume._createGeometryInstances(viewer.scene.globe.ellipsoid, cartographics);
 
 var geometryInstancesCount = geometryInstances.length;

@@ -665,7 +665,7 @@ define([
          * @default false
          * @private
          */
-        this.copyGlobeDepth = false;
+        this.copyGlobeDepth = true;
 
         /**
          * Blends the atmosphere to geometry far from the camera for horizon views. Allows for additional
