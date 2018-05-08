@@ -55,9 +55,10 @@ var cartographics = [
     Cesium.Cartographic.fromDegrees(-112.10828895143331, 36.20031318533197)
 ];
 
-/*
+scene.primitives.add(Cesium.PolylineShadowVolume.getPrimitive(scene.globe.ellipsoid, cartographics));
+
 // Early test for mitering
-var cartographics = [
+var cartographicsMiter = [
     Cesium.Cartographic.fromDegrees(0, 0, 0.0),
     Cesium.Cartographic.fromDegrees(2, 2, 0.0),
     Cesium.Cartographic.fromDegrees(0, 4, 0.0),
@@ -66,16 +67,16 @@ var cartographics = [
     Cesium.Cartographic.fromDegrees(-4, 6, 0.0),
     Cesium.Cartographic.fromDegrees(-4, 8, 0.0),
     Cesium.Cartographic.fromDegrees(-8, 8, 0.0)
-];*/
+];
 
-/*
+
 // Create geometries with boring shading
-var geometryInstances = Cesium.PolylineShadowVolume._createGeometryInstances(viewer.scene.globe.ellipsoid, cartographics);
+var geometryInstances = Cesium.PolylineShadowVolume._createGeometryInstances(viewer.scene.globe.ellipsoid, cartographicsMiter);
 
 var geometryInstancesCount = geometryInstances.length;
 for (var i = 0; i < geometryInstancesCount; i++) {
     var geometryInstance = geometryInstances[i];
-    geometryInstance.attributes.color = Cesium.ColorGeometryInstanceAttribute.fromColor(Cesium.Color.RED);
+    geometryInstance.attributes.color = Cesium.ColorGeometryInstanceAttribute.fromColor(Cesium.Color.WHITE);
 }
 
 // Add the geometry instance to primitives.
@@ -86,9 +87,6 @@ scene.primitives.add(new Cesium.Primitive({
     }),
     asynchronous : false
 }));
-*/
-
-scene.primitives.add(Cesium.PolylineShadowVolume.getPrimitive(scene.globe.ellipsoid, cartographics));
 
 //Sandcastle_End
     Sandcastle.finishedLoading();

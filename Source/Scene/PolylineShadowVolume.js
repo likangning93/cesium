@@ -267,7 +267,7 @@ define([
                 postEnd = cartographics[i + 2];
             }
             var minimumHeight = -100.0;// 100000.0;// -i * 10000.0;
-            var maximumHeight = 200000;// (i + 1) * 20000.0;
+            var maximumHeight = 4000;// (i + 1) * 20000.0;
             geometryInstances.push(createWallSegment(ellipsoid, start, end, minimumHeight, maximumHeight, preStart, postEnd));
         }
         return geometryInstances;

@@ -1,5 +1,3 @@
-#define ENABLE_GL_POSITION_LOG_DEPTH_AT_HEIGHT
-
 attribute vec3 position3DHigh;
 attribute vec3 position3DLow;
 attribute float batchId;
@@ -29,6 +27,7 @@ void main()
     v_rightPlane.w = -dot(ecRight, ecStart);
 
     vec4 positionRelativeToEye = czm_computePosition();
-    positionRelativeToEye.xyz += 10000.0 * normal;
+
+    positionRelativeToEye.xyz += 2.0 * czm_metersPerPixel(czm_modelViewProjectionRelativeToEye * positionRelativeToEye) * normal;
     gl_Position = czm_depthClampFarPlane(czm_modelViewProjectionRelativeToEye * positionRelativeToEye);
 }
