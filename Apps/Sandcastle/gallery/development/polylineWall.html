@@ -52,7 +52,8 @@ var cartographics = [
     Cesium.Cartographic.fromDegrees(-112.1340164450331, 36.05494287836128),
     Cesium.Cartographic.fromDegrees(-112.08821010582645, 36.097804071380715),
     Cesium.Cartographic.fromDegrees(-112.13296079730024, 36.168769146801104),
-    Cesium.Cartographic.fromDegrees(-112.10828895143331, 36.20031318533197)
+    Cesium.Cartographic.fromDegrees(-112.10828895143331, 36.20031318533197),
+    Cesium.Cartographic.fromDegrees(-112.138548165717, 36.1691100215289) // hairpin
 ];
 
 scene.primitives.add(Cesium.PolylineShadowVolume.getPrimitive(scene.globe.ellipsoid, cartographics));

@@ -28,6 +28,6 @@ void main()
 
     vec4 positionRelativeToEye = czm_computePosition();
 
-    positionRelativeToEye.xyz += 2.0 * czm_metersPerPixel(czm_modelViewProjectionRelativeToEye * positionRelativeToEye) * normal;
+    positionRelativeToEye.xyz += 4.0 * czm_metersPerPixel(czm_modelViewProjectionRelativeToEye * positionRelativeToEye) * normal; // TODO: may want to adjust based on angle of normal relative to line
     gl_Position = czm_depthClampFarPlane(czm_modelViewProjectionRelativeToEye * positionRelativeToEye);
 }

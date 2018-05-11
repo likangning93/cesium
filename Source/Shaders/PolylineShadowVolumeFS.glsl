@@ -23,8 +23,8 @@ void main(void)
     outOfBounds = outOfBounds || (distanceAlongForward < 0.0 || v_forwardExtent < distanceAlongForward);
 
     if (outOfBounds) {
-        //discard;
-        gl_FragColor = vec4(1.0, 0.0, 0.0, 0.1);
+        discard;
+        //gl_FragColor = vec4(1.0, 0.0, 0.0, 0.1);
     } else {
         gl_FragColor = vec4(0.0, 1.0, 0.0, 1.0);
     }
