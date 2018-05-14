@@ -12,6 +12,7 @@ define([
     '../Core/GeometryAttributes',
     '../Core/GeometryInstance',
     '../Core/GeometryInstanceAttribute',
+    '../Core/WebGLConstants',
     '../Shaders/PolylineShadowVolumeVS',
     '../Shaders/PolylineShadowVolumeFS',
     '../Renderer/RenderState',
@@ -32,6 +33,7 @@ define([
     GeometryAttributes,
     GeometryInstance,
     GeometryInstanceAttribute,
+    WebGLConstants,
     PolylineShadowVolumeVS,
     PolylineShadowVolumeFS,
     RenderState,
@@ -85,40 +87,62 @@ define([
     var offsetScratch = new Cartesian3();
     var normal1Scratch = new Cartesian3();
     var normal2Scratch = new Cartesian3();
-    function getAttributes(startCartesian, endCartesian) {
-        var encodedStart = EncodedCartesian3.fromCartesian(startCartesian, encodeScratch);
-        var offset = Cartesian3.subtract(endCartesian, startCartesian, offsetScratch);
+    var rightScratch = new Cartesian3();
+    // Computing whether or not a fragment is part of the line requires:
+    // - plane at the beginning of the segment
+    // - plane at the end of the segment
+    // - right plane for the segment (compute in VS)
+    function getAttributes(startCartesianLow, endCartesianLow, startCartesianHigh, endCartesianHigh) {
+        var encodedStart = EncodedCartesian3.fromCartesian(startCartesianLow, encodeScratch);
 
-        // Compute local forward and right vectors
-        var out = Cartesian3.normalize(startCartesian, normal1Scratch);
-        var forward = Cartesian3.normalize(offset, normal2Scratch);
-        var right = Cartesian3.cross(forward, out, normal1Scratch);
+        var forwardOffset = Cartesian3.subtract(endCartesianLow, startCartesianLow, offsetScratch);
 
-        var startHi_andRightX_Attribute = new GeometryInstanceAttribute({
+        var startHi_and_forwardOffsetX_Attribute = new GeometryInstanceAttribute({
             componentDatatype: ComponentDatatype.FLOAT,
             componentsPerAttribute: 4,
             normalize: false,
-            value : Cartesian3.pack(encodedStart.high, [0, 0, 0, right.x])
+            value : Cartesian3.pack(encodedStart.high, [0, 0, 0, forwardOffset.x])
         });
 
-        var startLo_andRightY_Attribute = new GeometryInstanceAttribute({
+        var startLo_and_forwardOffsetY_Attribute = new GeometryInstanceAttribute({
             componentDatatype: ComponentDatatype.FLOAT,
             componentsPerAttribute: 4,
             normalize: false,
-            value : Cartesian3.pack(encodedStart.low, [0, 0, 0, right.y])
+            value : Cartesian3.pack(encodedStart.low, [0, 0, 0, forwardOffset.y])
         });
 
-        var offset_andRightZ_Attribute = new GeometryInstanceAttribute({
+        var startUp = Cartesian3.subtract(startCartesianHigh, startCartesianLow, normal1Scratch);
+        startUp = Cartesian3.normalize(startUp, startUp);
+
+        // Plane normals will be almost antiparallel, and start plane normal will be very similar to normalize(endLow - startLow).
+        // This makes computing the segment's right vector less accurate, especially on the GPU in eyespace.
+        // So pass "up" in the start plane instead of start plane normal.
+        var startUp_and_forwardOffsetZ_attribute = new GeometryInstanceAttribute({
             componentDatatype: ComponentDatatype.FLOAT,
             componentsPerAttribute: 4,
             normalize: false,
-            value : Cartesian3.pack(offset, [0, 0, 0, right.z])
-        })
+            value : Cartesian3.pack(startUp, [0, 0, 0, forwardOffset.z])
+        });
+
+        var endUp = Cartesian3.subtract(endCartesianHigh, endCartesianLow, normal2Scratch);
+        endUp = Cartesian3.normalize(endUp, endUp);
+        var forward = Cartesian3.normalize(forwardOffset, forwardOffset);
+        var right = Cartesian3.cross(forward, endUp, rightScratch);
+        right = Cartesian3.normalize(right, right);
+        var endNormal = Cartesian3.cross(right, endUp, normal2Scratch); // Should be orthogonal, so no need to normalize.
+
+        var endNormal_attribute = new GeometryInstanceAttribute({
+            componentDatatype: ComponentDatatype.FLOAT,
+            componentsPerAttribute: 3,
+            normalize: false,
+            value : Cartesian3.pack(endNormal, [0, 0, 0])
+        });
 
         return {
-            startHi_andRightX : startHi_andRightX_Attribute,
-            startLo_andRightY : startLo_andRightY_Attribute,
-            offset_andRightZ : offset_andRightZ_Attribute
+            startHi_and_forwardOffsetX : startHi_and_forwardOffsetX_Attribute,
+            startLo_and_forwardOffsetY : startLo_and_forwardOffsetY_Attribute,
+            startUp_and_forwardOffsetZ : startUp_and_forwardOffsetZ_attribute,
+            endNormal : endNormal_attribute
         };
     }
 
@@ -212,7 +236,7 @@ define([
 
         // debug - for checking mitering stuff, normals
         for (var i = 0; i < 24; i++) {
-            //positions[i] += normals[i] * 10000.0;
+            //positions[i] += normals[i] * 100.0;
         }
 
         var indices = [
@@ -246,7 +270,7 @@ define([
 
         return new GeometryInstance({
             geometry : geometry,
-            attributes : getAttributes(minPosition0, minPosition1)
+            attributes : getAttributes(minPosition0, minPosition1, maxPosition0, maxPosition1)
         });
     }
 
@@ -266,7 +290,7 @@ define([
             if (i + 2 < cartoCount) {
                 postEnd = cartographics[i + 2];
             }
-            var minimumHeight = -100.0;// 100000.0;// -i * 10000.0;
+            var minimumHeight = -4000.0;// 100000.0;// -i * 10000.0;
             var maximumHeight = 4000;// (i + 1) * 20000.0;
             geometryInstances.push(createWallSegment(ellipsoid, start, end, minimumHeight, maximumHeight, preStart, postEnd));
         }
@@ -283,7 +307,8 @@ define([
                 enabled : false
             },
             //depthMask : false, // ?
-            blending : BlendingState.ALPHA_BLEND
+            blending : BlendingState.ALPHA_BLEND,
+            cull : WebGLConstants.FRONT_AND_BACK // otherwise, won't work when cam is in volume
         };
     }
 

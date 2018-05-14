@@ -3,29 +3,42 @@ attribute vec3 position3DLow;
 attribute float batchId;
 attribute vec3 normal;
 
-varying vec4 v_forwardPlane;
+varying vec4 v_startPlane;
+varying vec4 v_endPlane;
 varying vec4 v_rightPlane;
-varying float v_forwardExtent;
 
 void main()
 {
-    vec4 startHi_andRightX = czm_batchTable_startHi_andRightX(batchId);
-    vec4 startLo_andRightY = czm_batchTable_startLo_andRightY(batchId);
-    vec4 offset_andRightZ = czm_batchTable_offset_andRightZ(batchId);
+    vec4 entry1 = czm_batchTable_startHi_and_forwardOffsetX(batchId);
+    vec4 entry2 = czm_batchTable_startLo_and_forwardOffsetY(batchId);
 
-    vec3 ecStart = (czm_modelViewRelativeToEye * czm_translateRelativeToEye(startHi_andRightX.xyz, startLo_andRightY.xyz)).xyz;
-    vec3 ecOffset = czm_normal * offset_andRightZ.xyz;
-    float offsetExtent = length(ecOffset);
-    v_forwardExtent = offsetExtent;
+    vec3 ecStart = (czm_modelViewRelativeToEye * czm_translateRelativeToEye(entry1.xyz, entry2.xyz)).xyz;
+    vec3 offset = vec3(entry1.w, entry2.w, 0.0);
 
-    vec3 ecForward = ecOffset / offsetExtent;
-    v_forwardPlane.xyz = ecForward;
-    v_forwardPlane.w = -dot(ecForward, ecStart);
+    entry1 = czm_batchTable_startUp_and_forwardOffsetZ(batchId);
 
-    vec3 ecRight = czm_normal * vec3(startHi_andRightX.w, startLo_andRightY.w, offset_andRightZ.w);
+    offset.z = entry1.w;
+    offset = czm_normal * offset;
+    vec3 ecEnd = ecStart + offset;
+
+    vec3 ecStartUp = czm_normal * entry1.xyz;
+
+    // end plane
+    vec3 ecEndNormal = czm_normal * czm_batchTable_endNormal(batchId);
+    v_endPlane.xyz = ecEndNormal;
+    v_endPlane.w = -dot(ecEndNormal, ecEnd);
+
+    // Right plane
+    vec3 ecRight = normalize(cross(ecStartUp, ecEndNormal));
     v_rightPlane.xyz = ecRight;
     v_rightPlane.w = -dot(ecRight, ecStart);
 
+    // start plane
+    vec3 ecStartNormal = cross(ecStartUp, ecRight); // Should be orthogonal, so no need to normalize.
+    v_startPlane.xyz = ecStartNormal;
+    v_startPlane.w = -dot(ecStartNormal, ecStart);
+
+    // Position stuff
     vec4 positionRelativeToEye = czm_computePosition();
 
     positionRelativeToEye.xyz += 4.0 * czm_metersPerPixel(czm_modelViewProjectionRelativeToEye * positionRelativeToEye) * normal; // TODO: may want to adjust based on angle of normal relative to line

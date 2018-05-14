@@ -3,6 +3,8 @@ varying float v_logZ;
 varying vec3 v_logPositionEC;
 #endif
 
+#define ENABLE_GL_POSITION_LOG_DEPTH_AT_HEIGHT
+
 void czm_updatePositionDepth() {
 #if defined(LOG_DEPTH) && !defined(DISABLE_GL_POSITION_LOG_DEPTH)
     v_logPositionEC = (czm_inverseProjection * gl_Position).xyz;

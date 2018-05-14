@@ -101,7 +101,7 @@ define([
         nextPosition3DHigh : 9,
         nextPosition3DLow : 10,
         nextPosition2DHigh : 11,
-        nextPosition2DLow : 12
+        nextPosition2DLow : 12 // afaik these are mostly needed for properly handling clamping against near plane
     };
 
     /**

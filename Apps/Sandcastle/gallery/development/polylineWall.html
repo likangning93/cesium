@@ -29,9 +29,9 @@ function startup(Cesium) {
 //Sandcastle_Begin
 // Create the viewer.
 var viewer = new Cesium.Viewer('cesiumContainer', {
-    /*imageryProvider : Cesium.createTileMapServiceImageryProvider({
+    imageryProvider : Cesium.createTileMapServiceImageryProvider({
         url : Cesium.buildModuleUrl('Assets/Textures/NaturalEarthII')
-    })*/
+    })
 });
 viewer.extend(Cesium.viewerCesiumInspectorMixin);
 
@@ -48,6 +48,7 @@ rightHandler.setInputAction(function(movement) {
     }
 }, Cesium.ScreenSpaceEventType.RIGHT_CLICK);
 
+// Grand Canyon test
 var cartographics = [
     Cesium.Cartographic.fromDegrees(-112.1340164450331, 36.05494287836128),
     Cesium.Cartographic.fromDegrees(-112.08821010582645, 36.097804071380715),
@@ -56,6 +57,33 @@ var cartographics = [
     Cesium.Cartographic.fromDegrees(-112.138548165717, 36.1691100215289) // hairpin
 ];
 
+/*
+// Tiny zigzag
+var cartographics = [
+    Cesium.Cartographic.fromDegrees(-112.11340164450331, 36.015494287836128),
+    Cesium.Cartographic.fromDegrees(-112.11440164450331, 36.016494287836128),
+    Cesium.Cartographic.fromDegrees(-112.11540164450331, 36.015494287836128),
+    Cesium.Cartographic.fromDegrees(-112.11640164450331, 36.016494287836128)
+];
+*/
+/*
+// Medium zigzag
+var cartographics = [
+    Cesium.Cartographic.fromDegrees(-112.1340164450331, 36.05494287836128),
+    Cesium.Cartographic.fromDegrees(-112.2340164450331, 36.15494287836128),
+    Cesium.Cartographic.fromDegrees(-112.3340164450331, 36.05494287836128),
+    Cesium.Cartographic.fromDegrees(-112.4340164450331, 36.15494287836128)
+];
+*/
+/*
+// Colinear
+var cartographics = [
+    Cesium.Cartographic.fromDegrees(-112.1340164450331, 36.05494287836128),
+    Cesium.Cartographic.fromDegrees(-112.2340164450331, 36.05494287836128),
+    Cesium.Cartographic.fromDegrees(-112.3340164450331, 36.05494287836128),
+    Cesium.Cartographic.fromDegrees(-112.4340164450331, 36.05494287836128)
+];
+*/
 scene.primitives.add(Cesium.PolylineShadowVolume.getPrimitive(scene.globe.ellipsoid, cartographics));
 
 // Early test for mitering
@@ -88,6 +116,9 @@ scene.primitives.add(new Cesium.Primitive({
     }),
     asynchronous : false
 }));
+
+viewer.camera.lookAt(Cesium.Cartographic.toCartesian(cartographics[1]), new Cesium.Cartesian3(10000.0, 10000.0, 10000.0));
+viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
 
 //Sandcastle_End
     Sandcastle.finishedLoading();

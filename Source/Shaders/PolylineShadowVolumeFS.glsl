@@ -2,9 +2,9 @@
 #extension GL_EXT_frag_depth : enable
 #endif
 
-varying vec4 v_forwardPlane;
+varying vec4 v_startPlane;
+varying vec4 v_endPlane;
 varying vec4 v_rightPlane;
-varying float v_forwardExtent;
 
 void main(void)
 {
@@ -19,14 +19,15 @@ void main(void)
     bool outOfBounds = abs(czm_planeDistance(v_rightPlane, eyeCoordinate.xyz)) > 2.0 * czm_metersPerPixel(eyeCoordinate); // 4 pixels wide?
 
     // Check distance of the eye coordinate against the forward-facing plane
-    float distanceAlongForward = czm_planeDistance(v_forwardPlane, eyeCoordinate.xyz);
-    outOfBounds = outOfBounds || (distanceAlongForward < 0.0 || v_forwardExtent < distanceAlongForward);
+    float distanceFromStart = czm_planeDistance(v_startPlane, eyeCoordinate.xyz);
+    float distanceFromEnd = czm_planeDistance(v_endPlane, eyeCoordinate.xyz);
+    outOfBounds = outOfBounds || distanceFromStart < 0.0 || distanceFromEnd < 0.0;
 
     if (outOfBounds) {
         discard;
         //gl_FragColor = vec4(1.0, 0.0, 0.0, 0.1);
     } else {
-        gl_FragColor = vec4(0.0, 1.0, 0.0, 1.0);
+        gl_FragColor = vec4(0.0, 1.0, 0.0, 0.9);
     }
 
     czm_writeDepthClampedToFarPlane();
