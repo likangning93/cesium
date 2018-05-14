@@ -92,7 +92,8 @@ define([
     // - plane at the beginning of the segment
     // - plane at the end of the segment
     // - right plane for the segment (compute in VS)
-    function getAttributes(startCartesianLow, endCartesianLow, startCartesianHigh, endCartesianHigh) {
+    function getAttributes(startCartesianLow, endCartesianLow, startCartesianHigh, endCartesianHigh,
+        startCartesianLeftNormal, endCartesianLeftNormal) {
         var encodedStart = EncodedCartesian3.fromCartesian(startCartesianLow, encodeScratch);
 
         var forwardOffset = Cartesian3.subtract(endCartesianLow, startCartesianLow, offsetScratch);
@@ -111,25 +112,41 @@ define([
             value : Cartesian3.pack(encodedStart.low, [0, 0, 0, forwardOffset.y])
         });
 
+        var arr = [0, 0, 0, forwardOffset.z];
+        var forward = Cartesian3.normalize(forwardOffset, forwardOffset);
+
         var startUp = Cartesian3.subtract(startCartesianHigh, startCartesianLow, normal1Scratch);
         startUp = Cartesian3.normalize(startUp, startUp);
+
+        var right = Cartesian3.cross(forward, startUp, rightScratch);
+        right = Cartesian3.normalize(right, right);
+
+        var rightNormal_attribute = new GeometryInstanceAttribute({
+            componentDatatype: ComponentDatatype.FLOAT,
+            componentsPerAttribute: 3,
+            normalize: false,
+            value : Cartesian3.pack(right, [0, 0, 0])
+        });
+
+        var startNormal = Cartesian3.cross(startUp, startCartesianLeftNormal, normal1Scratch);
+        //var startNormal = Cartesian3.cross(startUp, right, new Cartesian3());
+        startNormal = Cartesian3.normalize(startNormal, startNormal);
 
         // Plane normals will be almost antiparallel, and start plane normal will be very similar to normalize(endLow - startLow).
         // This makes computing the segment's right vector less accurate, especially on the GPU in eyespace.
         // So pass "up" in the start plane instead of start plane normal.
-        var startUp_and_forwardOffsetZ_attribute = new GeometryInstanceAttribute({
+        var startNormal_and_forwardOffsetZ_attribute = new GeometryInstanceAttribute({
             componentDatatype: ComponentDatatype.FLOAT,
             componentsPerAttribute: 4,
             normalize: false,
-            value : Cartesian3.pack(startUp, [0, 0, 0, forwardOffset.z])
+            value : Cartesian3.pack(startNormal, arr)
         });
 
         var endUp = Cartesian3.subtract(endCartesianHigh, endCartesianLow, normal2Scratch);
         endUp = Cartesian3.normalize(endUp, endUp);
-        var forward = Cartesian3.normalize(forwardOffset, forwardOffset);
-        var right = Cartesian3.cross(forward, endUp, rightScratch);
-        right = Cartesian3.normalize(right, right);
-        var endNormal = Cartesian3.cross(right, endUp, normal2Scratch); // Should be orthogonal, so no need to normalize.
+        var endNormal = Cartesian3.cross(endCartesianLeftNormal, endUp, normal2Scratch);
+        //var endNormal = Cartesian3.cross(right, endUp, new Cartesian3());
+        endNormal = Cartesian3.normalize(endNormal, endNormal);
 
         var endNormal_attribute = new GeometryInstanceAttribute({
             componentDatatype: ComponentDatatype.FLOAT,
@@ -141,8 +158,9 @@ define([
         return {
             startHi_and_forwardOffsetX : startHi_and_forwardOffsetX_Attribute,
             startLo_and_forwardOffsetY : startLo_and_forwardOffsetY_Attribute,
-            startUp_and_forwardOffsetZ : startUp_and_forwardOffsetZ_attribute,
-            endNormal : endNormal_attribute
+            startNormal_and_forwardOffsetZ : startNormal_and_forwardOffsetZ_attribute,
+            endNormal : endNormal_attribute,
+            rightNormal : rightNormal_attribute
         };
     }
 
@@ -197,7 +215,7 @@ define([
 
             normal1Right = Cartesian3.normalize(normal1Right, normal1Right);
             if (rightHanded(start, end, end, postEnd)) {
-                normal0Right = Cartesian3.multiplyByScalar(normal0Right, -1.0, normal0Right);
+                normal1Right = Cartesian3.multiplyByScalar(normal1Right, -1.0, normal1Right);
             }
         } else {
             // If no preStart is given or preStart is colinear,
@@ -270,7 +288,7 @@ define([
 
         return new GeometryInstance({
             geometry : geometry,
-            attributes : getAttributes(minPosition0, minPosition1, maxPosition0, maxPosition1)
+            attributes : getAttributes(minPosition0, minPosition1, maxPosition0, maxPosition1, normal0Left, normal1Left)
         });
     }
 
