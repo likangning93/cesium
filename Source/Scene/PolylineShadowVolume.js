@@ -99,7 +99,8 @@ define([
     // - plane at the end of the segment
     // - right plane for the segment (compute in VS)
     function getAttributes(startCartesianLow, endCartesianLow, startCartesianHigh, endCartesianHigh,
-        startCartesianLeftNormal, endCartesianLeftNormal) {
+        startCartesianLeftNormal, endCartesianLeftNormal,
+        lengthSoFar, segmentLength, totalLength) {
         var encodedStart = EncodedCartesian3.fromCartesian(startCartesianLow, encodeScratch);
 
         var forwardOffset = Cartesian3.subtract(endCartesianLow, startCartesianLow, offsetScratch);
@@ -135,7 +136,6 @@ define([
         });
 
         var startNormal = Cartesian3.cross(startUp, startCartesianLeftNormal, normal1Scratch);
-        //var startNormal = Cartesian3.cross(startUp, right, new Cartesian3());
         startNormal = Cartesian3.normalize(startNormal, startNormal);
 
         // Plane normals will be almost antiparallel, and start plane normal will be very similar to normalize(endLow - startLow).
@@ -151,7 +151,6 @@ define([
         var endUp = Cartesian3.subtract(endCartesianHigh, endCartesianLow, normal2Scratch);
         endUp = Cartesian3.normalize(endUp, endUp);
         var endNormal = Cartesian3.cross(endCartesianLeftNormal, endUp, normal2Scratch);
-        //var endNormal = Cartesian3.cross(right, endUp, new Cartesian3());
         endNormal = Cartesian3.normalize(endNormal, endNormal);
 
         var endNormal_attribute = new GeometryInstanceAttribute({
@@ -161,12 +160,21 @@ define([
             value : Cartesian3.pack(endNormal, [0, 0, 0])
         });
 
+        // Texture coordinate localization params
+        var texcoordNormalization_attribute = new GeometryInstanceAttribute({
+            componentDatatype: ComponentDatatype.FLOAT,
+            componentsPerAttribute: 3,
+            normalize: false,
+            value : [lengthSoFar, segmentLength, totalLength]
+        });
+
         return {
             startHi_and_forwardOffsetX : startHi_and_forwardOffsetX_Attribute,
             startLo_and_forwardOffsetY : startLo_and_forwardOffsetY_Attribute,
             startNormal_and_forwardOffsetZ : startNormal_and_forwardOffsetZ_attribute,
             endNormal : endNormal_attribute,
-            rightNormal : rightNormal_attribute
+            rightNormal : rightNormal_attribute,
+            texcoordNormalization : texcoordNormalization_attribute
         };
     }
 
@@ -178,7 +186,7 @@ define([
     var matrix3Scratch = new Matrix3();
     var quaternionScratch = new Quaternion();
     var normalUpScratch = new Cartesian3();
-    function createWallSegment(ellipsoid, start, end, minimumHeight, maximumHeight, preStart, postEnd) {
+    function createWallSegment(ellipsoid, start, end, minimumHeight, maximumHeight, preStart, postEnd, lengthSoFar, segmentLength, totalLength) {
         // Compute positions for the wall.
         var minPosition0 = getPosition(ellipsoid, start, minimumHeight, positionsScratch[0]);
         var minPosition1 = getPosition(ellipsoid, end,   minimumHeight, positionsScratch[1]);
@@ -324,18 +332,37 @@ define([
 
         return new GeometryInstance({
             geometry : geometry,
-            attributes : getAttributes(minPosition0, minPosition1, maxPosition0, maxPosition1, normal0Left, normal1Left)
+            attributes : getAttributes(minPosition0, minPosition1, maxPosition0, maxPosition1, normal0Left, normal1Left, lengthSoFar, segmentLength, totalLength)
         });
     }
 
     function PolylineShadowVolume() {}
 
+    var worldStartScratch = new Cartesian3();
+    var worldEndScratch = new Cartesian3();
     function createGeometryInstances(ellipsoid, cartographics) {
         var cartoCount = cartographics.length;
         var geometryInstances = [];
-        for (var i = 0; i < cartoCount - 1; i++) {
-            var start = cartographics[i];
-            var end = cartographics[i + 1];
+        var i;
+        var worldStart;
+        var worldEnd;
+
+        // Compute total length in cartesian space
+        var totalLength = 0.0;
+        for (i = 0; i < cartoCount - 1; i++) {
+            worldStart = Cartographic.toCartesian(cartographics[i], ellipsoid, worldStartScratch);
+            worldEnd = Cartographic.toCartesian(cartographics[i + 1], ellipsoid, worldEndScratch);
+            totalLength += Cartesian3.distance(worldStart, worldEnd);
+        }
+
+        var lengthSoFar = 0.0;
+        for (i = 0; i < cartoCount - 1; i++) {
+            worldStart = Cartographic.toCartesian(cartographics[i], ellipsoid, worldStartScratch);
+            worldEnd = Cartographic.toCartesian(cartographics[i + 1], ellipsoid, worldEndScratch);
+            var segmentLength = Cartesian3.distance(worldStart, worldEnd);
+
+            var cartoStart = cartographics[i];
+            var cartoEnd = cartographics[i + 1];
             var preStart;
             var postEnd;
             if (i > 0) {
@@ -346,7 +373,9 @@ define([
             }
             var minimumHeight = -4000.0;// 100000.0;// -i * 10000.0;
             var maximumHeight = 4000;// (i + 1) * 20000.0;
-            geometryInstances.push(createWallSegment(ellipsoid, start, end, minimumHeight, maximumHeight, preStart, postEnd));
+            geometryInstances.push(createWallSegment(ellipsoid, cartoStart, cartoEnd, minimumHeight, maximumHeight, preStart, postEnd, lengthSoFar, segmentLength, totalLength));
+
+            lengthSoFar += segmentLength;
         }
         return geometryInstances;
     }
@@ -383,26 +412,6 @@ define([
             asynchronous : false,
             compressVertices : false // otherwise normals will be weird
         });
-    };
-
-    /**
-     * Create Geometry for a mitered wall formed from the given line segment.
-     * If preStart and postEnd are not provided, the wall segment will end without mitering.
-     * Provide normals such that the wall's thickness can be modulated by pushing positions along the normals.
-     *
-     * Exposed for testing.
-     *
-     * @param {Ellipsoid} ellipsoid
-     * @param {Cartographic} start
-     * @param {Cartographic} end
-     * @param {Number} minimumHeight
-     * @param {Number} maximumHeight
-     * @param {Cartographic} [preStart]
-     * @param {Cartographic} [postEnd]
-     * @private
-     */
-    PolylineShadowVolume._createWallSegment = function(ellipsoid, start, end, minimumHeight, maximumHeight, preStart, postEnd) {
-        return createWallSegment(ellipsoid, start, end, minimumHeight, maximumHeight, preStart, postEnd);
     };
 
     return PolylineShadowVolume;
