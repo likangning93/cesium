@@ -39,7 +39,9 @@ void main()
     // Position stuff
     vec4 positionRelativeToEye = czm_computePosition();
 
-    // TODO: need to push normals according to miter for hairpins
-    positionRelativeToEye.xyz += 6.0 * czm_metersPerPixel(czm_modelViewProjectionRelativeToEye * positionRelativeToEye) * normal; // TODO: may want to adjust based on angle of normal relative to line
+    // A "perfect" implementation would push along normals according to angle against forward instead of by unit amount.
+    // In practice, just extending the shadow volume a bit more works for most cases,
+    // and for very sharp turns we compute attributes to "break" the miter anyway.
+    positionRelativeToEye.xyz += 6.0 * czm_metersPerPixel(czm_modelViewProjectionRelativeToEye * positionRelativeToEye) * normal;
     gl_Position = czm_depthClampFarPlane(czm_modelViewProjectionRelativeToEye * positionRelativeToEye);
 }

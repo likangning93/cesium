@@ -12,6 +12,8 @@ define([
     '../Core/GeometryAttributes',
     '../Core/GeometryInstance',
     '../Core/GeometryInstanceAttribute',
+    '../Core/Matrix3',
+    '../Core/Quaternion',
     '../Core/WebGLConstants',
     '../Shaders/PolylineShadowVolumeVS',
     '../Shaders/PolylineShadowVolumeFS',
@@ -33,6 +35,8 @@ define([
     GeometryAttributes,
     GeometryInstance,
     GeometryInstanceAttribute,
+    Matrix3,
+    Quaternion,
     WebGLConstants,
     PolylineShadowVolumeVS,
     PolylineShadowVolumeFS,
@@ -42,6 +46,8 @@ define([
     Primitive
 ) {
     'use strict';
+
+    var MITER_BREAK = Math.cos(CesiumMath.toRadians(30));
 
     function pointLineDistance2D(start, end, point) {
         var denominator = Cartesian2.distance(start, end);
@@ -169,6 +175,9 @@ define([
     var normal0RightScratch = new Cartesian3();
     var normal1RightScratch = new Cartesian3();
     var positionsScratch = [new Cartesian3(), new Cartesian3(), new Cartesian3(), new Cartesian3()];
+    var matrix3Scratch = new Matrix3();
+    var quaternionScratch = new Quaternion();
+    var normalUpScratch = new Cartesian3();
     function createWallSegment(ellipsoid, start, end, minimumHeight, maximumHeight, preStart, postEnd) {
         // Compute positions for the wall.
         var minPosition0 = getPosition(ellipsoid, start, minimumHeight, positionsScratch[0]);
@@ -179,6 +188,11 @@ define([
         // Compute normals that will approximately work for mitering
         var normal0Right = normal0RightScratch;
         var normal1Right = normal1RightScratch;
+
+        var out;
+        var normalUp;
+        var quaternion;
+        var rotationMatrix;
 
         var lineDirection = Cartesian3.subtract(minPosition1, minPosition0, lineDirectionScratch);
         lineDirection = Cartesian3.normalize(lineDirection, lineDirection);
@@ -193,13 +207,24 @@ define([
             normal0Right = Cartesian3.multiplyByScalar(normal0Right, -0.5, normal0Right);
 
             normal0Right = Cartesian3.normalize(normal0Right, normal0Right);
+
+            // If the angle between preStart and line direction is too acute,
+            // break the miter by rotating the normal 90 degrees.
+            if (Cartesian3.dot(lineDirection, preStartDirection) > MITER_BREAK) {
+                normalUp = Cartesian3.cross(lineDirection, preStartDirection, normalUpScratch);
+                quaternion = Quaternion.fromAxisAngle(normalUp, CesiumMath.PI_OVER_TWO, quaternionScratch);
+                rotationMatrix = Matrix3.fromQuaternion(quaternion, matrix3Scratch);
+                normal0Right = Matrix3.multiplyByVector(rotationMatrix, normal0Right, normal0Right);
+            }
+
+            // Flip the normal to face the correct direction
             if (rightHanded(start, end, preStart, start)) {
                 normal0Right = Cartesian3.multiplyByScalar(normal0Right, -1.0, normal0Right);
             }
         } else {
             // If no preStart is given or preStart is colinear,
             // push the normal out at 90 degrees from the direction but roughly tangent to the ellipsoid
-            var out = Cartesian3.normalize(minPosition0, miterCartesianScratch);
+            out = Cartesian3.normalize(minPosition0, miterCartesianScratch);
             Cartesian3.normalize(out, out);
             Cartesian3.cross(out, lineDirection, normal0Right);
             normal0Right = Cartesian3.normalize(normal0Right, normal0Right);
@@ -214,13 +239,24 @@ define([
             normal1Right = Cartesian3.multiplyByScalar(normal1Right, -0.5, normal1Right);
 
             normal1Right = Cartesian3.normalize(normal1Right, normal1Right);
+
+            // If the angle between line direction and postEnd is too acute,
+            // break the miter by rotating the normal 90 degrees.
+            if (Cartesian3.dot(lineDirection, postEndDirection) > MITER_BREAK) {
+                normalUp = Cartesian3.cross(lineDirection, postEndDirection, normalUpScratch);
+                quaternion = Quaternion.fromAxisAngle(normalUp, CesiumMath.PI_OVER_TWO, quaternionScratch);
+                rotationMatrix = Matrix3.fromQuaternion(quaternion, matrix3Scratch);
+                normal1Right = Matrix3.multiplyByVector(rotationMatrix, normal1Right, normal1Right);
+            }
+
+            // Flip the normal to face the correct direction
             if (rightHanded(start, end, end, postEnd)) {
                 normal1Right = Cartesian3.multiplyByScalar(normal1Right, -1.0, normal1Right);
             }
         } else {
             // If no preStart is given or preStart is colinear,
             // push the normal out at 90 degrees from the direction but roughly tangent to the ellipsoid
-            var out = Cartesian3.normalize(minPosition1, miterCartesianScratch);
+            out = Cartesian3.normalize(minPosition1, miterCartesianScratch);
             Cartesian3.normalize(out, out);
             Cartesian3.cross(out, lineDirection, normal1Right);
             normal1Right = Cartesian3.normalize(normal1Right, normal1Right);
@@ -300,8 +336,8 @@ define([
         for (var i = 0; i < cartoCount - 1; i++) {
             var start = cartographics[i];
             var end = cartographics[i + 1];
-            var preStart = undefined;
-            var postEnd = undefined;
+            var preStart;
+            var postEnd;
             if (i > 0) {
                 preStart = cartographics[i - 1];
             }
@@ -347,7 +383,7 @@ define([
             asynchronous : false,
             compressVertices : false // otherwise normals will be weird
         });
-    }
+    };
 
     /**
      * Create Geometry for a mitered wall formed from the given line segment.

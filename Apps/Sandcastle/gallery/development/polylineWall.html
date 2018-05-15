@@ -54,7 +54,11 @@ var cartographics = [
     Cesium.Cartographic.fromDegrees(-112.08821010582645, 36.097804071380715),
     Cesium.Cartographic.fromDegrees(-112.13296079730024, 36.168769146801104),
     Cesium.Cartographic.fromDegrees(-112.10828895143331, 36.20031318533197),
-    Cesium.Cartographic.fromDegrees(-112.138548165717, 36.1691100215289) // hairpin
+    Cesium.Cartographic.fromDegrees(-112.138548165717, 36.1691100215289), // hairpins
+    Cesium.Cartographic.fromDegrees(-112.11482556496543, 36.20127524083297),
+    Cesium.Cartographic.fromDegrees(-112.15921333464016, 36.17876011207708),
+    Cesium.Cartographic.fromDegrees(-112.14700151155604, 36.21683132404626),
+    Cesium.Cartographic.fromDegrees(-112.20919883052926, 36.19475754001766)
 ];
 
 /*
@@ -97,7 +101,6 @@ var cartographicsMiter = [
     Cesium.Cartographic.fromDegrees(-4, 8, 0.0),
     Cesium.Cartographic.fromDegrees(-8, 8, 0.0)
 ];
-
 
 // Create geometries with boring shading
 var geometryInstances = Cesium.PolylineShadowVolume._createGeometryInstances(viewer.scene.globe.ellipsoid, cartographicsMiter);
