@@ -192,6 +192,17 @@ define([
         }),
 
         /**
+         *
+         */
+        czm_pickDepthTexture : new AutomaticUniform({
+            size : 1,
+            datatype : WebGLConstants.SAMPLER_2D,
+            getValue : function(uniformState) {
+                return uniformState.pickDepthTexture;
+            }
+        }),
+
+        /**
          * An automatic GLSL uniform representing a 4x4 model transformation matrix that
          * transforms model coordinates to world coordinates.
          *

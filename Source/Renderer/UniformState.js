@@ -43,9 +43,16 @@ define([
      */
     function UniformState() {
         /**
+         * "Owned" by GlobeDepth
          * @type {Texture}
          */
         this.globeDepthTexture = undefined;
+
+        /**
+         * "Owned" by PickDepth
+         * @type {Texture}
+         */
+        this.pickDepthTexture = undefined;
 
         this._viewport = new BoundingRectangle();
         this._viewportCartesian4 = new Cartesian4();

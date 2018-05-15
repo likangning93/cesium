@@ -2227,6 +2227,15 @@ define([
             us.updatePass(Pass.CLASSIFICATION);
             commands = frustumCommands.commands[Pass.CLASSIFICATION];
             length = frustumCommands.indices[Pass.CLASSIFICATION];
+            // TODO: this can't be good...
+            if (defined(globeDepth) && (environmentState.useGlobeDepthFramebuffer || depthOnly) && scene.useDepthPicking) {
+                // PERFORMANCE_IDEA: Use MRT to avoid the extra copy.
+                var depthStencilTexture = depthOnly ? passState.framebuffer.depthStencilTexture : globeDepth.framebuffer.depthStencilTexture;
+                var pickDepth = getPickDepth(scene, index);
+                pickDepth.update(context, depthStencilTexture);
+                pickDepth.executeCopyFullDepth(context, passState);
+            }
+
             for (j = 0; j < length; ++j) {
                 executeCommand(commands[j], scene, context, passState);
             }
@@ -2252,6 +2261,15 @@ define([
                 length = frustumCommands.indices[Pass.CESIUM_3D_TILE_CLASSIFICATION];
                 for (j = 0; j < length; ++j) {
                     executeCommand(commands[j], scene, context, passState);
+                }
+
+                // TODO: this can't be good...
+                if (defined(globeDepth) && (environmentState.useGlobeDepthFramebuffer || depthOnly) && scene.useDepthPicking) {
+                    // PERFORMANCE_IDEA: Use MRT to avoid the extra copy.
+                    var depthStencilTexture = depthOnly ? passState.framebuffer.depthStencilTexture : globeDepth.framebuffer.depthStencilTexture;
+                    var pickDepth = getPickDepth(scene, index);
+                    pickDepth.update(context, depthStencilTexture);
+                    pickDepth.executeCopyFullDepth(context, passState);
                 }
 
                 // Draw classification marked for both terrain and 3D Tiles classification

@@ -28,8 +28,8 @@ vec3 getEyeCoordinate3FromWindowCoordinate(vec2 fragCoord, float logDepthOrDepth
 vec3 vectorFromOffset(vec4 eyeCoordinate, vec2 positiveOffset) {
     vec2 glFragCoordXY = gl_FragCoord.xy;
     // Sample depths at both offset and negative offset
-    float upOrRightLogDepth = czm_unpackDepth(texture2D(czm_globeDepthTexture, (glFragCoordXY + positiveOffset) / czm_viewport.zw));
-    float downOrLeftLogDepth = czm_unpackDepth(texture2D(czm_globeDepthTexture, (glFragCoordXY - positiveOffset) / czm_viewport.zw));
+    float upOrRightLogDepth = czm_unpackDepth(texture2D(czm_pickDepthTexture, (glFragCoordXY + positiveOffset) / czm_viewport.zw));
+    float downOrLeftLogDepth = czm_unpackDepth(texture2D(czm_pickDepthTexture, (glFragCoordXY - positiveOffset) / czm_viewport.zw));
     // Explicitly evaluate both paths
     // Necessary for multifrustum and for edges of the screen
     bvec2 upOrRightInBounds = lessThan(glFragCoordXY + positiveOffset, czm_viewport.zw);
@@ -44,7 +44,7 @@ vec3 vectorFromOffset(vec4 eyeCoordinate, vec2 positiveOffset) {
 void main(void)
 {
 #ifdef REQUIRES_EC
-    float logDepthOrDepth = czm_unpackDepth(texture2D(czm_globeDepthTexture, gl_FragCoord.xy / czm_viewport.zw));
+    float logDepthOrDepth = czm_unpackDepth(texture2D(czm_pickDepthTexture, gl_FragCoord.xy / czm_viewport.zw));
     vec4 eyeCoordinate = czm_windowToEyeCoordinates(gl_FragCoord.xy, logDepthOrDepth);
 #endif
 
