@@ -90,7 +90,21 @@ var cartographics = [
     Cesium.Cartographic.fromDegrees(-112.4340164450331, 36.05494287836128)
 ];
 */
-var polylineOnTerrainPrimitive = scene.primitives.add(Cesium.PolylineShadowVolume.getPrimitive(scene.globe.ellipsoid, cartographics));
+
+var polylineGlowMaterial = Cesium.Material.fromType('PolylineGlow', {
+    innerWidth : 1.0
+});
+
+var arrowMaterial = Cesium.Material.fromType('PolylineArrow');
+
+var dashMaterial = Cesium.Material.fromType('PolylineDash', {
+    color : Cesium.Color.RED
+});
+
+var outlineMaterial = Cesium.Material.fromType('PolylineOutline');
+
+var polylineOnTerrainPrimitive = Cesium.PolylineShadowVolume.getPrimitive(scene.globe.ellipsoid, cartographics, dashMaterial);
+scene.primitives.add(polylineOnTerrainPrimitive);
 /*
 // Early test for mitering
 var cartographicsMiter = [

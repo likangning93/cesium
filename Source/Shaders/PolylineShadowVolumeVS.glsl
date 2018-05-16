@@ -9,6 +9,8 @@ varying vec4 v_rightPlaneEC;
 varying vec3 v_forwardDirectionEC;
 varying vec2 v_alignedPlaneDistances;
 varying vec3 v_texcoordNormalization;
+varying float v_width;
+varying float v_polylineAngle;
 
 void main()
 {
@@ -55,4 +57,12 @@ void main()
     // and for very sharp turns we compute attributes to "break" the miter anyway.
     positionRelativeToEye.xyz += 8.0 * czm_metersPerPixel(positionRelativeToEye) * normal;
     gl_Position = czm_depthClampFarPlane(czm_modelViewProjectionRelativeToEye * positionRelativeToEye);
+
+    v_width = 8.0;
+
+    // Approximate relative screen space direction of the line.
+    // This doesn't work great if the view direction is roughly aligned with the line
+    // Directly copying what PolylineCommon.glsl does using ecStart and ecEnd is even worse.
+    vec2 approxLineDirection = normalize(vec2(forwardDirectionEC.x, -forwardDirectionEC.y));
+    v_polylineAngle = czm_fastApproximateAtan(approxLineDirection.x, approxLineDirection.y);
 }

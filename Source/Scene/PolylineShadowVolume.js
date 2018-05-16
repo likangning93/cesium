@@ -394,7 +394,7 @@ define([
         };
     }
 
-    PolylineShadowVolume.getPrimitive = function(ellipsoid, cartographics) {
+    PolylineShadowVolume.getPrimitive = function(ellipsoid, cartographics, polylineMaterial) {
         var geometryInstances = createGeometryInstances(ellipsoid, cartographics);
         var material = new MaterialAppearance({
             flat : true,
@@ -403,8 +403,10 @@ define([
             materialSupport : MaterialAppearance.MaterialSupport.BASIC,
             vertexShaderSource : PolylineShadowVolumeVS,
             fragmentShaderSource : PolylineShadowVolumeFS,
+            material : polylineMaterial,
             renderState : RenderState.fromCache(getColorRenderState())
         });
+
         return new Primitive({
             geometryInstances : geometryInstances,
             appearance : material,

@@ -50,11 +50,21 @@ void main(void)
     s = ((s * v_texcoordNormalization.y) + v_texcoordNormalization.x) / v_texcoordNormalization.z;
     float t = (width + halfMaxWidth) / (2.0 * halfMaxWidth);
 
-
+/*
     // dashing for "science" aka PARTY GUY
     float rez = 0.01;
     float blue = czm_branchFreeTernaryFloat((mod(floor(s / rez), 4.0) == 1.0), 0.0, 1.0);
     gl_FragColor = vec4(s, t, blue, 1.0);
+*/
+
+    czm_materialInput materialInput;
+
+    materialInput.s = s;
+    materialInput.st = vec2(s, t);
+    materialInput.str = vec3(s, t, 0.0);
+
+    czm_material material = czm_getMaterial(materialInput);
+    gl_FragColor = vec4(material.diffuse + material.emission, material.alpha);
 
     czm_writeDepthClampedToFarPlane();
 }
