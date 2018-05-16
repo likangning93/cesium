@@ -33,7 +33,9 @@ var viewer = new Cesium.Viewer('cesiumContainer', {
         url : Cesium.buildModuleUrl('Assets/Textures/NaturalEarthII')
     })
 });
-viewer.extend(Cesium.viewerCesiumInspectorMixin);
+//viewer.extend(Cesium.viewerCesiumInspectorMixin);
+viewer.extend(Cesium.viewerCesium3DTilesInspectorMixin);
+var inspectorViewModel = viewer.cesium3DTilesInspector.viewModel;
 
 var scene = viewer.scene;
 
@@ -88,8 +90,8 @@ var cartographics = [
     Cesium.Cartographic.fromDegrees(-112.4340164450331, 36.05494287836128)
 ];
 */
-scene.primitives.add(Cesium.PolylineShadowVolume.getPrimitive(scene.globe.ellipsoid, cartographics));
-
+var polylineOnTerrainPrimitive = scene.primitives.add(Cesium.PolylineShadowVolume.getPrimitive(scene.globe.ellipsoid, cartographics));
+/*
 // Early test for mitering
 var cartographicsMiter = [
     Cesium.Cartographic.fromDegrees(0, 0, 0.0),
@@ -119,6 +121,11 @@ scene.primitives.add(new Cesium.Primitive({
     }),
     asynchronous : false
 }));
+*/
+
+Sandcastle.addToolbarButton('toggle visibility', function() {
+    polylineOnTerrainPrimitive.show = !polylineOnTerrainPrimitive.show;
+});
 
 viewer.camera.lookAt(Cesium.Cartographic.toCartesian(cartographics[1]), new Cesium.Cartesian3(10000.0, 10000.0, 10000.0));
 viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);

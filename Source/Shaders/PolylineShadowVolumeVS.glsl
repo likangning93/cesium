@@ -51,8 +51,8 @@ void main()
     vec4 positionRelativeToEye = czm_computePosition();
 
     // A "perfect" implementation would push along normals according to angle against forward instead of by unit amount.
-    // In practice, just extending the shadow volume a bit more works for most cases,
+    // In practice, just extending the shadow volume a bit more than needed works for most cases,
     // and for very sharp turns we compute attributes to "break" the miter anyway.
-    positionRelativeToEye.xyz += 12.0 * czm_metersPerPixel(czm_modelViewProjectionRelativeToEye * positionRelativeToEye) * normal;
+    positionRelativeToEye.xyz += 8.0 * czm_metersPerPixel(positionRelativeToEye) * normal;
     gl_Position = czm_depthClampFarPlane(czm_modelViewProjectionRelativeToEye * positionRelativeToEye);
 }

@@ -302,12 +302,12 @@ define([
         }
 
         var indices = [
-            0, 1, 2, 0, 2, 3,
-            0, 3, 7, 0, 7, 4,
-            0, 4, 5, 0, 5, 1,
-            5, 4, 7, 5, 7, 6,
-            5, 6, 2, 5, 2, 1,
-            3, 2, 6, 3, 6, 7
+            0, 1, 2, 0, 2, 3, // right
+            0, 3, 7, 0, 7, 4, // start
+            0, 4, 5, 0, 5, 1, // bottom
+            5, 4, 7, 5, 7, 6, // left
+            5, 6, 2, 5, 2, 1, // end
+            3, 2, 6, 3, 6, 7 // top
         ];
         var geometryAttributes = new GeometryAttributes({
             position : new GeometryAttribute({
@@ -371,7 +371,7 @@ define([
             if (i + 2 < cartoCount) {
                 postEnd = cartographics[i + 2];
             }
-            var minimumHeight = -4000.0;// 100000.0;// -i * 10000.0;
+            var minimumHeight = -10.0;//-4000.0;// 100000.0;// -i * 10000.0;
             var maximumHeight = 4000;// (i + 1) * 20000.0;
             geometryInstances.push(createWallSegment(ellipsoid, cartoStart, cartoEnd, minimumHeight, maximumHeight, preStart, postEnd, lengthSoFar, segmentLength, totalLength));
 
@@ -387,11 +387,10 @@ define([
     function getColorRenderState() {
         return {
             depthTest : {
-                enabled : false
-            },
+                enabled : false // Helps prevent problems when viewing very closely
+            }
             //depthMask : false, // ?
-            blending : BlendingState.ALPHA_BLEND,
-            cull : WebGLConstants.FRONT_AND_BACK // otherwise, won't work when cam is in volume
+            //blending : BlendingState.ALPHA_BLEND // ?
         };
     }
 

@@ -17,13 +17,16 @@ float rayPlaneDistance(vec3 origin, vec3 direction, vec3 planeNormal, float plan
 void main(void)
 {
     float logDepthOrDepth = czm_unpackDepth(texture2D(czm_globeDepthTexture, gl_FragCoord.xy / czm_viewport.zw));
-    if (logDepthOrDepth < czm_log2FarDistance) {
+
+    // Discard for sky
+    if (logDepthOrDepth == 0.0) {
         discard;
     }
+
     vec4 eyeCoordinate = czm_windowToEyeCoordinates(gl_FragCoord.xy, logDepthOrDepth);
     eyeCoordinate /= eyeCoordinate.w;
 
-    float halfMaxWidth = 4.0 * czm_metersPerPixel(eyeCoordinate); // ~8 pixels wide
+    float halfMaxWidth = 2.0 * czm_metersPerPixel(eyeCoordinate); // ~4 pixels wide
     // Check distance of the eye coordinate against the right-facing plane
     float width = czm_planeDistance(v_rightPlaneEC, eyeCoordinate.xyz);
 
@@ -39,7 +42,10 @@ void main(void)
     distanceFromStart = rayPlaneDistance(eyeCoordinate.xyz, -v_forwardDirectionEC, v_forwardDirectionEC.xyz, v_alignedPlaneDistances.x);
     distanceFromEnd = rayPlaneDistance(eyeCoordinate.xyz, v_forwardDirectionEC, -v_forwardDirectionEC.xyz, v_alignedPlaneDistances.y);
 
-    // TODO: why don't mitered danglies seem to need special handling?
+    // Clamp - distance to aligned planes may be negative due to mitering
+    distanceFromStart = max(0.0, distanceFromStart);
+    distanceFromEnd = max(0.0, distanceFromEnd);
+
     float s = distanceFromStart / (distanceFromStart + distanceFromEnd);
     s = ((s * v_texcoordNormalization.y) + v_texcoordNormalization.x) / v_texcoordNormalization.z;
     float t = (width + halfMaxWidth) / (2.0 * halfMaxWidth);
@@ -47,12 +53,8 @@ void main(void)
 
     // dashing for "science" aka PARTY GUY
     float rez = 0.01;
-    if ((mod(floor(s / rez), 2.0) == 1.0)) {
-        gl_FragColor = vec4(s, t, 1.0, 1.0);
-        return;
-    }
-
-    gl_FragColor = vec4(s, t, 0.0, 1.0);
+    float blue = czm_branchFreeTernaryFloat((mod(floor(s / rez), 4.0) == 1.0), 0.0, 1.0);
+    gl_FragColor = vec4(s, t, blue, 1.0);
 
     czm_writeDepthClampedToFarPlane();
 }
