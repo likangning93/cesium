@@ -29,63 +29,93 @@ varying vec4 v_color;
 varying vec2 v_alignedPlaneDistances;
 #endif
 
-// TODO: morph?
+vec3 morphVector(vec3 startNorm, vec4 startPos, vec3 endNorm, vec4 endPos, float t) {
+    vec3 startNormPos = startNorm + startPos.xyz;
+    vec3 endNormPos = endNorm + endPos.xyz;
+
+    vec3 medNormPos = mix(startNormPos, endNormPos, t);
+    vec3 medPos = mix(startPos.xyz, endPos.xyz, t);
+    //return normalize(medNormPos - medPos);
+    return normalize(mix(startNorm, endNorm, t));
+}
 
 void main()
 {
-#ifdef COLUMBUS_VIEW_2D
-    vec3 ecStart = (czm_modelViewRelativeToEye * czm_translateRelativeToEye(vec3(0.0, startHiLo2D.xy), vec3(0.0, startHiLo2D.zw))).xyz;
+//#ifdef COLUMBUS_VIEW_2D
+    vec4 ecStart2D = czm_modelViewRelativeToEye * czm_translateRelativeToEye(vec3(0.0, startHiLo2D.xy), vec3(0.0, startHiLo2D.zw));
 
-    vec3 forwardDirectionEC = czm_normal * vec3(0.0, offsetAndRight2D.xy);
-    vec3 ecEnd = forwardDirectionEC + ecStart;
-    forwardDirectionEC = normalize(forwardDirectionEC);
-
-    v_forwardDirectionEC = forwardDirectionEC;
+    vec3 forwardDirectionEC2D = czm_normal * vec3(0.0, offsetAndRight2D.xy);
+    vec4 ecEnd2D = vec4(forwardDirectionEC2D, 0.0) + ecStart2D;
+    forwardDirectionEC2D = normalize(forwardDirectionEC2D);
 
     // Right plane
-    v_rightPlaneEC.xyz = czm_normal * vec3(0.0, offsetAndRight2D.zw);
-    v_rightPlaneEC.w = -dot(v_rightPlaneEC.xyz, ecStart);
+    vec4 rightPlaneEC2D;
+    rightPlaneEC2D.xyz = czm_normal * vec3(0.0, offsetAndRight2D.zw);
+    //rightPlaneEC2D.w = -dot(rightPlaneEC2D.xyz, ecStart2D);
 
     // start plane
-    v_startPlaneEC.xyz =  czm_normal * vec3(0.0, startEndNormals2D.xy);
-    v_startPlaneEC.w = -dot(v_startPlaneEC.xyz, ecStart);
+    vec4 startPlaneEC2D;
+    startPlaneEC2D.xyz =  czm_normal * vec3(0.0, startEndNormals2D.xy);
+    //startPlaneEC2D.w = -dot(startPlaneEC2D.xyz, ecStart2D);
 
     // end plane
-    v_endPlaneEC.xyz =  czm_normal * vec3(0.0, startEndNormals2D.zw);
-    v_endPlaneEC.w = -dot(v_endPlaneEC.xyz, ecEnd);
+    vec4 endPlaneEC2D;
+    endPlaneEC2D.xyz =  czm_normal * vec3(0.0, startEndNormals2D.zw);
+    //endPlaneEC2D.w = -dot(endPlaneEC2D.xyz, ecEnd2D);
 
-    v_texcoordNormalization_and_halfWidth.xy = texcoordNormalization2D;
+    vec3 texcoordNormalization_and_halfWidth2D;
+    texcoordNormalization_and_halfWidth2D.xy = texcoordNormalization2D;
 
-#else // COLUMBUS_VIEW_2D
-    vec3 ecStart = (czm_modelViewRelativeToEye * czm_translateRelativeToEye(startHi_and_forwardOffsetX.xyz, startLo_and_forwardOffsetY.xyz)).xyz;
-    vec3 offset = czm_normal * vec3(startHi_and_forwardOffsetX.w, startLo_and_forwardOffsetY.w, startNormal_and_forwardOffsetZ.w);
-    vec3 ecEnd = ecStart + offset;
+//#else // COLUMBUS_VIEW_2D
+    vec4 ecStart3D = czm_modelViewRelativeToEye * czm_translateRelativeToEye(startHi_and_forwardOffsetX.xyz, startLo_and_forwardOffsetY.xyz);
+    vec3 offset3D = czm_normal * vec3(startHi_and_forwardOffsetX.w, startLo_and_forwardOffsetY.w, startNormal_and_forwardOffsetZ.w);
+    vec4 ecEnd3D = ecStart3D + vec4(offset3D, 0.0);
 
-    vec3 forwardDirectionEC = normalize(offset);
-    v_forwardDirectionEC = forwardDirectionEC;
+    vec3 forwardDirectionEC3D = normalize(offset3D);
 
     // start plane
-    v_startPlaneEC.xyz = czm_normal * startNormal_and_forwardOffsetZ.xyz;
-    v_startPlaneEC.w = -dot(v_startPlaneEC.xyz, ecStart);
+    vec4 startPlaneEC3D;
+    startPlaneEC3D.xyz = czm_normal * startNormal_and_forwardOffsetZ.xyz;
+    //startPlaneEC3D.w = -dot(startPlaneEC3D.xyz, ecStart3D);
 
     // end plane
-    v_endPlaneEC.xyz = czm_normal * endNormal_andTextureCoordinateNormalizationX.xyz;
-    v_endPlaneEC.w = -dot(v_endPlaneEC.xyz, ecEnd);
+    vec4 endPlaneEC3D;
+    endPlaneEC3D.xyz = czm_normal * endNormal_andTextureCoordinateNormalizationX.xyz;
+    //endPlaneEC3D.w = -dot(endPlaneEC3D.xyz, ecEnd3D);
 
     // Right plane
-    v_rightPlaneEC.xyz = czm_normal * rightNormal_andTextureCoordinateNormalizationY.xyz;
+    vec4 rightPlaneEC3D;
+    rightPlaneEC3D.xyz = czm_normal * rightNormal_andTextureCoordinateNormalizationY.xyz;
+    //rightPlaneEC3D.w = -dot(rightPlaneEC3D.xyz, ecStart3D);
+
+    vec3 texcoordNormalization_and_halfWidth3D;
+    texcoordNormalization_and_halfWidth3D.xy = vec2(endNormal_andTextureCoordinateNormalizationX.w, rightNormal_andTextureCoordinateNormalizationY.w);
+
+//#endif // COLUMBUS_VIEW_2D
+
+    vec4 p = mix(ecStart2D, ecStart3D, czm_morphTime);
+
+    vec3 ecStart = p.xyz;
+    vec3 ecEnd = ecStart + mix(czm_normal * vec3(0.0, offsetAndRight2D.xy), offset3D, czm_morphTime);
+
+    v_startPlaneEC.xyz = morphVector(startPlaneEC2D.xyz, ecStart2D, startPlaneEC3D.xyz, ecStart3D, czm_morphTime);
+    v_endPlaneEC.xyz = morphVector(endPlaneEC2D.xyz, ecEnd2D, endPlaneEC3D.xyz, ecEnd3D, czm_morphTime);
+    v_rightPlaneEC.xyz = morphVector(rightPlaneEC2D.xyz, ecStart2D, rightPlaneEC3D.xyz, ecStart3D, czm_morphTime);
+
+    v_startPlaneEC.w = -dot(v_startPlaneEC.xyz, ecStart);
+    v_endPlaneEC.w = -dot(v_endPlaneEC.xyz, ecEnd);
     v_rightPlaneEC.w = -dot(v_rightPlaneEC.xyz, ecStart);
 
-    v_texcoordNormalization_and_halfWidth.xy = vec2(endNormal_andTextureCoordinateNormalizationX.w, rightNormal_andTextureCoordinateNormalizationY.w);
-
-#endif // COLUMBUS_VIEW_2D
+    v_forwardDirectionEC = morphVector(forwardDirectionEC2D, ecStart2D, forwardDirectionEC3D, ecStart3D, czm_morphTime);
+    v_texcoordNormalization_and_halfWidth = mix(texcoordNormalization_and_halfWidth2D, texcoordNormalization_and_halfWidth3D, czm_morphTime);
 
 #ifdef PER_INSTANCE_COLOR
     v_color = czm_batchTable_color(batchId);
 #else // PER_INSTANCE_COLOR
     // For computing texture coordinates
-    v_alignedPlaneDistances.x = -dot(forwardDirectionEC, ecStart);
-    v_alignedPlaneDistances.y = -dot(-forwardDirectionEC, ecEnd);
+
+    v_alignedPlaneDistances.x = -dot(v_forwardDirectionEC, ecStart);
+    v_alignedPlaneDistances.y = -dot(-v_forwardDirectionEC, ecEnd);
 #endif // PER_INSTANCE_COLOR
 
     // Compute a normal along which to "push" the position out, extending the miter depending on view distance.
@@ -115,7 +145,7 @@ void main()
     gl_Position = czm_projection * positionEC;
 
     // Approximate relative screen space direction of the line.
-    vec2 approxLineDirection = normalize(vec2(forwardDirectionEC.x, -forwardDirectionEC.y));
+    vec2 approxLineDirection = normalize(vec2(v_forwardDirectionEC.x, -v_forwardDirectionEC.y));
     approxLineDirection.y = czm_branchFreeTernary(approxLineDirection.x == 0.0 && approxLineDirection.y == 0.0, -1.0, approxLineDirection.y);
     v_polylineAngle = czm_fastApproximateAtan(approxLineDirection.x, approxLineDirection.y);
 }

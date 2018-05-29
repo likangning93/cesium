@@ -137,7 +137,7 @@ define([
         this._spPick2D = undefined;
         this._renderState = RenderState.fromCache({
             cull : {
-                enabled : true // prevent double-draw. Geometry is "inverted" (reversed winding order) so we're drawing backfaces.
+                enabled : false // prevent double-draw. Geometry is "inverted" (reversed winding order) so we're drawing backfaces.
             }
         });
     }
@@ -397,10 +397,10 @@ define([
             for (var j = 0; j < colorLength; ++j) {
                 var colorCommand = colorCommands[j];
                 // Use derived appearance command for 2D
-                if (frameState.mode !== SceneMode.SCENE3D &&
-                    colorCommand.shaderProgram === groundPolylinePrimitive._sp) {
-                    colorCommand = colorCommand.derivedCommands.color2D;
-                }
+                //if (frameState.mode !== SceneMode.SCENE3D &&
+                //    colorCommand.shaderProgram === groundPolylinePrimitive._sp) {
+                //    colorCommand = colorCommand.derivedCommands.color2D;
+                //}
                 colorCommand.modelMatrix = modelMatrix;
                 colorCommand.boundingVolume = boundingSpheres[j];
                 colorCommand.cull = cull;
