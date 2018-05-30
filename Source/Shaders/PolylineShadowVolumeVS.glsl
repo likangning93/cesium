@@ -109,7 +109,7 @@ void main()
     // In practice, just extending the shadow volume more than needed works for most cases,
     // and for very sharp turns we compute attributes to "break" the miter anyway.
     positionEC3D.xyz -= normalEC; // undo the unit length push
-    positionEC3D.xyz += width * max(0.0, czm_metersPerPixel(positionEC3D)) * normalEC; // prevent artifacts when czm_metersPerPixel is negative (behind camera)
+    positionEC3D.xyz += 0.5 * width * max(0.0, czm_metersPerPixel(positionEC3D)) * normalEC; // prevent artifacts when czm_metersPerPixel is negative (behind camera)
 
     // 2D
     vec4 positionEC2D = czm_modelViewRelativeToEye * czm_translateRelativeToEye(position2DHigh.zxy, position2DLow.zxy); // w = 1.0, see czm_computePosition
@@ -126,7 +126,7 @@ void main()
     // In practice, just extending the shadow volume more than needed works for most cases,
     // and for very sharp turns we compute attributes to "break" the miter anyway.
     positionEC2D.xyz -= normalEC; // undo the unit length push
-    positionEC2D.xyz += width * max(0.0, czm_metersPerPixel(positionEC2D)) * normalEC; // prevent artifacts when czm_metersPerPixel is negative (behind camera)
+    positionEC2D.xyz += 0.5 * width * max(0.0, czm_metersPerPixel(positionEC2D)) * normalEC; // prevent artifacts when czm_metersPerPixel is negative (behind camera)
 
     // Blend
     gl_Position = czm_projection * mix(positionEC2D, positionEC3D, czm_morphTime);

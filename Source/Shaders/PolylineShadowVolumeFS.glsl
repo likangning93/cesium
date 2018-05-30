@@ -21,12 +21,12 @@ float rayPlaneDistanceUnsafe(vec3 origin, vec3 direction, vec3 planeNormal, floa
 
 void main(void)
 {
-    float logDepthOrDepth = czm_unpackDepth(texture2D(czm_globeDepthTexture, gl_FragCoord.xy / czm_viewport.zw));
+ //   float logDepthOrDepth = czm_unpackDepth(texture2D(czm_globeDepthTexture, gl_FragCoord.xy / czm_viewport.zw));
 
     // Discard for sky
-    bool shouldDiscard = logDepthOrDepth == 0.0;
+ //   bool shouldDiscard = logDepthOrDepth == 0.0;
 
-    vec4 eyeCoordinate = czm_windowToEyeCoordinates(gl_FragCoord.xy, logDepthOrDepth);
+    vec4 eyeCoordinate = gl_FragCoord;//czm_windowToEyeCoordinates(gl_FragCoord.xy, logDepthOrDepth);
     eyeCoordinate /= eyeCoordinate.w;
 
     float halfMaxWidth = v_texcoordNormalization_and_halfWidth.z * czm_metersPerPixel(eyeCoordinate);
@@ -37,16 +37,16 @@ void main(void)
     float distanceFromStart = rayPlaneDistanceUnsafe(eyeCoordinate.xyz, -v_forwardDirectionEC, v_startPlaneEC.xyz, v_startPlaneEC.w);
     float distanceFromEnd = rayPlaneDistanceUnsafe(eyeCoordinate.xyz, v_forwardDirectionEC, v_endPlaneEC.xyz, v_endPlaneEC.w);
 
-    shouldDiscard = shouldDiscard || (abs(width) > halfMaxWidth || distanceFromStart < 0.0 || distanceFromEnd < 0.0);
+    //shouldDiscard = shouldDiscard || (abs(width) > halfMaxWidth || distanceFromStart < 0.0 || distanceFromEnd < 0.0);
 
-    if (shouldDiscard) {
+    //if (shouldDiscard) {
 #ifdef DEBUG_SHOW_VOLUME
-        gl_FragColor = vec4(1.0, 0.0, 0.0, 0.5);
-        return;
+    //    gl_FragColor = vec4(1.0, 0.0, 0.0, 0.5);
+    //    return;
 #else // DEBUG_SHOW_VOLUME
-        discard;
+    //    discard;
 #endif // DEBUG_SHOW_VOLUME
-    }
+    //}
 
 #ifdef PICK
     gl_FragColor.a = 1.0;
