@@ -633,16 +633,18 @@ define([
     var segmentStartNormal2DScratch = new Cartesian3();
     var segmentEndNormal2DScratch = new Cartesian3();
 
-    var offsetScratch = new Cartesian3();
+    var forwardScratch3D = new Cartesian3();
     var startUpScratch = new Cartesian3();
     var endUpScratch = new Cartesian3();
     var rightScratch = new Cartesian3();
     var startPlaneNormalScratch = new Cartesian3();
     var endPlaneNormalScratch = new Cartesian3();
-    var encodeScratch = new EncodedCartesian3();
+    var encodeStartScratch = new EncodedCartesian3();
+    var encodeEndScratch = new EncodedCartesian3();
 
-    var encodeScratch2D = new EncodedCartesian3();
-    var forwardOffset2DScratch = new Cartesian3();
+    var encodeStartScratch2D = new EncodedCartesian3();
+    var encodeEndScratch2D = new EncodedCartesian3();
+    var forwardScratch2D = new Cartesian3();
     var right2DScratch = new Cartesian3();
 
     var normalNudgeScratch = new Cartesian3();
@@ -678,16 +680,17 @@ define([
         var indices = vertexCount > 65535 ? new Uint32Array(indexCount) : new Uint16Array(indexCount);
         var positionsArray = new Float64Array(vertexCount * 3);
 
-        var startHi_and_forwardOffsetX = new Float32Array(arraySizeVec4);
-        var startLo_and_forwardOffsetY = new Float32Array(arraySizeVec4);
-        var startNormal_and_forwardOffsetZ = new Float32Array(arraySizeVec4);
+        var startHi_and_startNormalX = new Float32Array(arraySizeVec4);
+        var startLo_and_startNormalY = new Float32Array(arraySizeVec4);
+        var endHi_and_startNormalZ = new Float32Array(arraySizeVec4);
+        var endLo = new Float32Array(vertexCount * 3);
         var endNormal_and_textureCoordinateNormalizationX = new Float32Array(arraySizeVec4);
         var rightNormal_and_textureCoordinateNormalizationY = new Float32Array(arraySizeVec4);
 
         var startHiLo2D = new Float32Array(arraySizeVec4);
-        var offsetAndRight2D = new Float32Array(arraySizeVec4);
+        var endHiLo2D = new Float32Array(arraySizeVec4);
         var startEndNormals2D = new Float32Array(arraySizeVec4);
-        var texcoordNormalization2D = new Float32Array(vertexCount * 2);
+        var texcoordNormalization_and_right2D = new Float32Array(arraySizeVec4);
 
         /*** Compute total lengths for texture coordinate normalization ***/
         // 2D
@@ -777,7 +780,7 @@ define([
             var nudgeResult = nudgeCartographic(startCartographic, endCartographic);
             var start2D = projection.project(startCartographic, segmentStart2DScratch);
             var end2D = projection.project(endCartographic, segmentEnd2DScratch);
-            var direction2D = direction(end2D, start2D, forwardOffset2DScratch);
+            var direction2D = direction(end2D, start2D, forwardScratch2D);
             direction2D.y = Math.abs(direction2D.y);
 
             var startGeometryNormal2D = segmentStartNormal2DScratch;
@@ -817,9 +820,9 @@ define([
             var segmentLength3D = Cartesian3.distance(startTop, endTop);
 
             // Encode start position and end position as high precision point + offset
-            var encodedStart = EncodedCartesian3.fromCartesian(startBottom, encodeScratch);
-            var forwardOffset = Cartesian3.subtract(endBottom, startBottom, offsetScratch);
-            var forward = Cartesian3.normalize(forwardOffset, rightScratch);
+            var encodedStart = EncodedCartesian3.fromCartesian(startBottom, encodeStartScratch);
+            var encodedEnd = EncodedCartesian3.fromCartesian(endBottom, encodeEndScratch);
+            var forward = direction(endBottom, startBottom, forwardScratch3D);
 
             // Right plane
             var startUp = Cartesian3.subtract(startTop, startBottom, startUpScratch);
@@ -844,15 +847,16 @@ define([
             // In 2D case, positions and normals can be done as 2 components
             var segmentLength2D = Cartesian3.distance(start2D, end2D);
 
-            var encodedStart2D = EncodedCartesian3.fromCartesian(start2D, encodeScratch2D);
-            var forwardOffset2D = Cartesian3.subtract(end2D, start2D, forwardOffset2DScratch);
+            var encodedStart2D = EncodedCartesian3.fromCartesian(start2D, encodeStartScratch2D);
+            var encodedEnd2D = EncodedCartesian3.fromCartesian(end2D, encodeEndScratch2D);
+            var forward2D = direction(end2D, start2D, forwardScratch2D);
 
             // Right direction is just forward direction rotated by -90 degrees around Z
             // Similarly with plane normals
-            var right2D = Cartesian3.normalize(forwardOffset2D, right2DScratch);
-            var swap = right2D.x;
-            right2D.x = right2D.y;
-            right2D.y = -swap;
+            var right2D = right2DScratch;
+            right2D.x = forward2D.y;
+            right2D.y = -forward2D.x;
+            right2D.z = 0.0;
 
             var texcoordNormalization2DX = segmentLength2D / length2D;
             var texcoordNormalization2DY = lengthSoFar2D / length2D;
@@ -860,21 +864,22 @@ define([
             /** Pack **/
             for (j = 0; j < 8; j++) {
                 var vec4Index = vec4sWriteIndex + j * 4;
-                var vec2Index = vec2sWriteIndex + j * 2;
                 var wIndex = vec4Index + 3;
 
                 // Encode sidedness of vertex in texture coordinate normalization X
                 var sidedness = j < 4 ? 1.0 : -1.0;
 
                 // 3D
-                Cartesian3.pack(encodedStart.high, startHi_and_forwardOffsetX, vec4Index);
-                startHi_and_forwardOffsetX[wIndex] = forwardOffset.x;
+                Cartesian3.pack(encodedStart.high, startHi_and_startNormalX, vec4Index);
+                startHi_and_startNormalX[wIndex] = startPlaneNormal.x;
 
-                Cartesian3.pack(encodedStart.low, startLo_and_forwardOffsetY, vec4Index);
-                startLo_and_forwardOffsetY[wIndex] = forwardOffset.y;
+                Cartesian3.pack(encodedStart.low, startLo_and_startNormalY, vec4Index);
+                startLo_and_startNormalY[wIndex] = startPlaneNormal.y;
 
-                Cartesian3.pack(startPlaneNormal, startNormal_and_forwardOffsetZ, vec4Index);
-                startNormal_and_forwardOffsetZ[wIndex] = forwardOffset.z;
+                Cartesian3.pack(encodedEnd.high, endHi_and_startNormalZ, vec4Index);
+                endHi_and_startNormalZ[wIndex] = startPlaneNormal.z;
+
+                Cartesian3.pack(encodedEnd.low, endLo, vec3sWriteIndex + j * 3);
 
                 Cartesian3.pack(endPlaneNormal, endNormal_and_textureCoordinateNormalizationX, vec4Index);
                 endNormal_and_textureCoordinateNormalizationX[wIndex] = texcoordNormalization3DX * sidedness;
@@ -888,18 +893,20 @@ define([
                 startHiLo2D[vec4Index + 2] = encodedStart2D.low.x;
                 startHiLo2D[vec4Index + 3] = encodedStart2D.low.y;
 
+                endHiLo2D[vec4Index] = encodedEnd2D.high.x;
+                endHiLo2D[vec4Index + 1] = encodedEnd2D.high.y;
+                endHiLo2D[vec4Index + 2] = encodedEnd2D.low.x;
+                endHiLo2D[vec4Index + 3] = encodedEnd2D.low.y;
+
                 startEndNormals2D[vec4Index] = -startGeometryNormal2D.y;
                 startEndNormals2D[vec4Index + 1] = startGeometryNormal2D.x;
                 startEndNormals2D[vec4Index + 2] = endGeometryNormal2D.y;
                 startEndNormals2D[vec4Index + 3] = -endGeometryNormal2D.x;
 
-                offsetAndRight2D[vec4Index] = forwardOffset2D.x;
-                offsetAndRight2D[vec4Index + 1] = forwardOffset2D.y;
-                offsetAndRight2D[vec4Index + 2] = right2D.x;
-                offsetAndRight2D[vec4Index + 3] = right2D.y;
-
-                texcoordNormalization2D[vec2Index] = texcoordNormalization2DX * sidedness;
-                texcoordNormalization2D[vec2Index + 1] = texcoordNormalization2DY;
+                texcoordNormalization_and_right2D[vec4Index] = texcoordNormalization2DX * sidedness;
+                texcoordNormalization_and_right2D[vec4Index + 1] = texcoordNormalization2DY;
+                texcoordNormalization_and_right2D[vec4Index + 2] = right2D.x;
+                texcoordNormalization_and_right2D[vec4Index + 3] = right2D.y;
             }
 
             /****************************************************************
@@ -993,21 +1000,22 @@ define([
                     normalize : false,
                     values : positionsArray
                 }),
-                startHi_and_forwardOffsetX : getVec4GeometryAttribute(startHi_and_forwardOffsetX),
-                startLo_and_forwardOffsetY : getVec4GeometryAttribute(startLo_and_forwardOffsetY),
-                startNormal_and_forwardOffsetZ : getVec4GeometryAttribute(startNormal_and_forwardOffsetZ),
+                startHi_and_startNormalX : getVec4GeometryAttribute(startHi_and_startNormalX),
+                startLo_and_startNormalY : getVec4GeometryAttribute(startLo_and_startNormalY),
+                endHi_and_startNormalZ : getVec4GeometryAttribute(endHi_and_startNormalZ),
+                endLo : new GeometryAttribute({
+                    componentDatatype : ComponentDatatype.FLOAT,
+                    componentsPerAttribute : 3,
+                    normalize : false,
+                    values : endLo
+                }),
                 endNormal_and_textureCoordinateNormalizationX : getVec4GeometryAttribute(endNormal_and_textureCoordinateNormalizationX),
                 rightNormal_and_textureCoordinateNormalizationY : getVec4GeometryAttribute(rightNormal_and_textureCoordinateNormalizationY),
 
                 startHiLo2D : getVec4GeometryAttribute(startHiLo2D),
-                offsetAndRight2D : getVec4GeometryAttribute(offsetAndRight2D),
+                endHiLo2D : getVec4GeometryAttribute(endHiLo2D),
                 startEndNormals2D : getVec4GeometryAttribute(startEndNormals2D),
-                texcoordNormalization2D : new GeometryAttribute({
-                    componentDatatype : ComponentDatatype.FLOAT,
-                    componentsPerAttribute : 2,
-                    normalize : false,
-                    values : texcoordNormalization2D
-                })
+                texcoordNormalization_and_right2D : getVec4GeometryAttribute(texcoordNormalization_and_right2D)
             },
             indices : indices,
             boundingSphere : boundingSphere
