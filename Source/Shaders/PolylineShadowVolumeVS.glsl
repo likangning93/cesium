@@ -2,21 +2,22 @@ attribute vec3 position3DHigh;
 attribute vec3 position3DLow;
 
 #ifndef COLUMBUS_VIEW_2D
-attribute vec4 startHi_and_forwardOffsetX;
-attribute vec4 startLo_and_forwardOffsetY;
-attribute vec4 startNormal_and_forwardOffsetZ;
+attribute vec4 startHi_and_startNormalX;
+attribute vec4 startLo_and_startNormalY;
+attribute vec4 endHi_and_startNormalZ;
+attribute vec3 endLo;
 attribute vec4 endNormal_and_textureCoordinateNormalizationX;
 attribute vec4 rightNormal_and_textureCoordinateNormalizationY;
 #else
 attribute vec4 startHiLo2D;
-attribute vec4 offsetAndRight2D;
+attribute vec4 endHiLo2D;
 attribute vec4 startEndNormals2D;
-attribute vec2 texcoordNormalization2D;
+attribute vec4 texcoordNormalization_and_right2D;
 #endif
 
 attribute float batchId;
 
-varying vec4 v_startPlaneEC_vectorLengthHalfWidth; // Packing halfWidth onto here as length, should be safe b/c halfWidth is few significant figures
+varying vec4 v_startPlaneEC_vectorLengthHalfWidth;
 varying vec4 v_endPlaneEC;
 varying vec4 v_rightPlaneEC;
 varying vec4 v_forwardOffsetEC_and_ecStartX;
@@ -34,14 +35,13 @@ void main()
 {
 #ifdef COLUMBUS_VIEW_2D
     vec3 ecStart = (czm_modelViewRelativeToEye * czm_translateRelativeToEye(vec3(0.0, startHiLo2D.xy), vec3(0.0, startHiLo2D.zw))).xyz;
+    vec3 ecEnd = (czm_modelViewRelativeToEye * czm_translateRelativeToEye(vec3(0.0, endHiLo2D.xy), vec3(0.0, endHiLo2D.zw))).xyz;
 
-    vec3 forwardDirectionEC = czm_normal * vec3(0.0, offsetAndRight2D.xy);
-    vec3 ecEnd = forwardDirectionEC + ecStart;
-    v_forwardOffsetEC_and_ecStartX.xyz = forwardDirectionEC;
-    forwardDirectionEC = normalize(forwardDirectionEC);
+    vec3 forwardDirectionEC = normalize(ecEnd - ecStart);
+    v_forwardOffsetEC_and_ecStartX.xyz = ecEnd - ecStart;
 
     // Right plane
-    v_rightPlaneEC.xyz = czm_normal * vec3(0.0, offsetAndRight2D.zw);
+    v_rightPlaneEC.xyz = czm_normal * vec3(0.0, texcoordNormalization_and_right2D.zw);
     v_rightPlaneEC.w = -dot(v_rightPlaneEC.xyz, ecStart);
 
     // start plane
@@ -53,19 +53,18 @@ void main()
     v_endPlaneEC.xyz =  czm_normal * vec3(0.0, startEndNormals2D.zw);
     v_endPlaneEC.w = -dot(v_endPlaneEC.xyz, ecEnd);
 
-    v_texcoordNormalization_and_ecStartYZ.xy = vec2(abs(texcoordNormalization2D.x), texcoordNormalization2D.y);
+    v_texcoordNormalization_and_ecStartYZ.xy = vec2(abs(texcoordNormalization_and_right2D.x), texcoordNormalization_and_right2D.y);
 
 #else // COLUMBUS_VIEW_2D
-    vec3 ecStart = (czm_modelViewRelativeToEye * czm_translateRelativeToEye(startHi_and_forwardOffsetX.xyz, startLo_and_forwardOffsetY.xyz)).xyz;
-    vec3 forwardDirectionEC = czm_normal * vec3(startHi_and_forwardOffsetX.w, startLo_and_forwardOffsetY.w, startNormal_and_forwardOffsetZ.w);
-    vec3 ecEnd = ecStart + forwardDirectionEC;
+    vec3 ecStart = (czm_modelViewRelativeToEye * czm_translateRelativeToEye(startHi_and_startNormalX.xyz, startLo_and_startNormalY.xyz)).xyz;
+    vec3 ecEnd = (czm_modelViewRelativeToEye * czm_translateRelativeToEye(endHi_and_startNormalZ.xyz, endLo)).xyz;
 
-    v_forwardOffsetEC_and_ecStartX.xyz = forwardDirectionEC;
-    forwardDirectionEC = normalize(forwardDirectionEC);
+    vec3 forwardDirectionEC = normalize(ecEnd - ecStart);
+    v_forwardOffsetEC_and_ecStartX.xyz = ecEnd - ecStart;
 
     // start plane
     vec4 startPlaneEC;
-    startPlaneEC.xyz = czm_normal * startNormal_and_forwardOffsetZ.xyz;
+    startPlaneEC.xyz = czm_normal * vec3(startHi_and_startNormalX.w, startLo_and_startNormalY.w, endHi_and_startNormalZ.w);
     startPlaneEC.w = -dot(startPlaneEC.xyz, ecStart);
 
     // end plane
@@ -82,7 +81,7 @@ void main()
 
 #ifdef PER_INSTANCE_COLOR
     v_color = czm_batchTable_color(batchId);
-#endif
+#endif // PER_INSTANCE_COLOR
 
     // Pack ecStart
     v_forwardOffsetEC_and_ecStartX.w = ecStart.x;
@@ -126,11 +125,11 @@ void main()
     width = width / dot(normalEC, v_rightPlaneEC.xyz); // width = distance to push along N
 
     // Determine if this vertex is on the "left" or "right"
-    #ifdef COLUMBUS_VIEW_2D
-        normalEC *= sign(texcoordNormalization2D.x);
-    #else
-        normalEC *= sign(endNormal_and_textureCoordinateNormalizationX.w);
-    #endif
+#ifdef COLUMBUS_VIEW_2D
+    normalEC *= sign(texcoordNormalization_and_right2D.x);
+#else
+    normalEC *= sign(endNormal_and_textureCoordinateNormalizationX.w);
+#endif
 
     positionEC.xyz += width * normalEC;
     gl_Position = czm_projection * positionEC;
