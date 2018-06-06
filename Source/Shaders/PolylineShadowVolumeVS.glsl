@@ -16,11 +16,11 @@ attribute vec2 texcoordNormalization2D;
 
 attribute float batchId;
 
-varying vec4 v_startPlaneEC;
+varying vec4 v_startPlaneEC_vectorLengthHalfWidth; // Packing halfWidth onto here as length, should be safe b/c halfWidth is few significant figures
 varying vec4 v_endPlaneEC;
 varying vec4 v_rightPlaneEC;
-varying vec3 v_forwardDirectionEC;
-varying vec3 v_texcoordNormalization_and_halfWidth;
+varying vec4 v_forwardOffsetEC_and_ecStartX;
+varying vec4 v_texcoordNormalization_and_ecStartYZ;
 
 // For materials
 varying float v_width;
@@ -28,8 +28,6 @@ varying float v_polylineAngle;
 
 #ifdef PER_INSTANCE_COLOR
 varying vec4 v_color;
-#else
-varying vec2 v_alignedPlaneDistances;
 #endif
 
 void main()
@@ -39,35 +37,36 @@ void main()
 
     vec3 forwardDirectionEC = czm_normal * vec3(0.0, offsetAndRight2D.xy);
     vec3 ecEnd = forwardDirectionEC + ecStart;
+    v_forwardOffsetEC_and_ecStartX.xyz = forwardDirectionEC;
     forwardDirectionEC = normalize(forwardDirectionEC);
-
-    v_forwardDirectionEC = forwardDirectionEC;
 
     // Right plane
     v_rightPlaneEC.xyz = czm_normal * vec3(0.0, offsetAndRight2D.zw);
     v_rightPlaneEC.w = -dot(v_rightPlaneEC.xyz, ecStart);
 
     // start plane
-    v_startPlaneEC.xyz =  czm_normal * vec3(0.0, startEndNormals2D.xy);
-    v_startPlaneEC.w = -dot(v_startPlaneEC.xyz, ecStart);
+    vec4 startPlaneEC;
+    startPlaneEC.xyz =  czm_normal * vec3(0.0, startEndNormals2D.xy);
+    startPlaneEC.w = -dot(startPlaneEC.xyz, ecStart);
 
     // end plane
     v_endPlaneEC.xyz =  czm_normal * vec3(0.0, startEndNormals2D.zw);
     v_endPlaneEC.w = -dot(v_endPlaneEC.xyz, ecEnd);
 
-    v_texcoordNormalization_and_halfWidth.xy = vec2(abs(texcoordNormalization2D.x), texcoordNormalization2D.y);
+    v_texcoordNormalization_and_ecStartYZ.xy = vec2(abs(texcoordNormalization2D.x), texcoordNormalization2D.y);
 
 #else // COLUMBUS_VIEW_2D
     vec3 ecStart = (czm_modelViewRelativeToEye * czm_translateRelativeToEye(startHi_and_forwardOffsetX.xyz, startLo_and_forwardOffsetY.xyz)).xyz;
-    vec3 offset = czm_normal * vec3(startHi_and_forwardOffsetX.w, startLo_and_forwardOffsetY.w, startNormal_and_forwardOffsetZ.w);
-    vec3 ecEnd = ecStart + offset;
+    vec3 forwardDirectionEC = czm_normal * vec3(startHi_and_forwardOffsetX.w, startLo_and_forwardOffsetY.w, startNormal_and_forwardOffsetZ.w);
+    vec3 ecEnd = ecStart + forwardDirectionEC;
 
-    vec3 forwardDirectionEC = normalize(offset);
-    v_forwardDirectionEC = forwardDirectionEC;
+    v_forwardOffsetEC_and_ecStartX.xyz = forwardDirectionEC;
+    forwardDirectionEC = normalize(forwardDirectionEC);
 
     // start plane
-    v_startPlaneEC.xyz = czm_normal * startNormal_and_forwardOffsetZ.xyz;
-    v_startPlaneEC.w = -dot(v_startPlaneEC.xyz, ecStart);
+    vec4 startPlaneEC;
+    startPlaneEC.xyz = czm_normal * startNormal_and_forwardOffsetZ.xyz;
+    startPlaneEC.w = -dot(startPlaneEC.xyz, ecStart);
 
     // end plane
     v_endPlaneEC.xyz = czm_normal * endNormal_and_textureCoordinateNormalizationX.xyz;
@@ -77,17 +76,17 @@ void main()
     v_rightPlaneEC.xyz = czm_normal * rightNormal_and_textureCoordinateNormalizationY.xyz;
     v_rightPlaneEC.w = -dot(v_rightPlaneEC.xyz, ecStart);
 
-    v_texcoordNormalization_and_halfWidth.xy = vec2(abs(endNormal_and_textureCoordinateNormalizationX.w), rightNormal_and_textureCoordinateNormalizationY.w);
+    v_texcoordNormalization_and_ecStartYZ.xy = vec2(abs(endNormal_and_textureCoordinateNormalizationX.w), rightNormal_and_textureCoordinateNormalizationY.w);
 
 #endif // COLUMBUS_VIEW_2D
 
 #ifdef PER_INSTANCE_COLOR
     v_color = czm_batchTable_color(batchId);
-#else // PER_INSTANCE_COLOR
-    // For computing texture coordinates
-    v_alignedPlaneDistances.x = -dot(forwardDirectionEC, ecStart);
-    v_alignedPlaneDistances.y = -dot(-forwardDirectionEC, ecEnd);
-#endif // PER_INSTANCE_COLOR
+#endif
+
+    // Pack ecStart
+    v_forwardOffsetEC_and_ecStartX.w = ecStart.x;
+    v_texcoordNormalization_and_ecStartYZ.zw = ecStart.yz;
 
     // Compute a normal along which to "push" the position out, extending the miter depending on view distance.
     // Position has already been "pushed" by unit length along miter normal, and miter normals are encoded in the planes.
@@ -96,26 +95,44 @@ void main()
 
     // Check distance to the end plane and start plane, pick the plane that is closer
     vec4 positionEC = czm_modelViewRelativeToEye * positionRelativeToEye; // w = 1.0, see czm_computePosition
-    float absStartPlaneDistance = abs(czm_planeDistance(v_startPlaneEC, positionEC.xyz));
+    float absStartPlaneDistance = abs(czm_planeDistance(startPlaneEC, positionEC.xyz));
     float absEndPlaneDistance = abs(czm_planeDistance(v_endPlaneEC, positionEC.xyz));
-    vec3 planeDirection = czm_branchFreeTernary(absStartPlaneDistance < absEndPlaneDistance, v_startPlaneEC.xyz, v_endPlaneEC.xyz);
+    vec3 planeDirection = czm_branchFreeTernary(absStartPlaneDistance < absEndPlaneDistance, startPlaneEC.xyz, v_endPlaneEC.xyz);
     vec3 upOrDown = normalize(cross(v_rightPlaneEC.xyz, planeDirection)); // Points "up" for start plane, "down" at end plane.
     vec3 normalEC = normalize(cross(planeDirection, upOrDown));           // In practice, the opposite seems to work too.
 
-    // Determine if this vertex is on the "left" or "right"
-#ifdef COLUMBUS_VIEW_2D
-    normalEC *= sign(texcoordNormalization2D.x);
-#else
-    normalEC *= sign(endNormal_and_textureCoordinateNormalizationX.w);
-#endif
-
-    // A "perfect" implementation would push along normals according to the angle against forward.
-    // In practice, just extending the shadow volume more than needed works for most cases,
-    // and for very sharp turns we compute attributes to "break" the miter anyway.
+    // Determine distance along normalEC to push for a volume of appropriate width.
+    // Make volumes about double pixel width for a conservative fit - in practice the
+    // extra cost here is minimal compared to the loose volume heights.
+    //
+    // N = normalEC (guaranteed "right-facing")
+    // R = rightEC
+    // p = angle between N and R
+    // w = distance to push along R if R == N
+    // d = distance to push along N
+    //
+    //   N   R
+    //  { \ p| }      * cos(p) = dot(N, R) = w / d
+    //  d\ \ |  |w    * d = w / dot(N, R)
+    //    { \| }
+    //       o---------- polyline segment ---->
+    //
     float width = czm_batchTable_width(batchId);
     v_width = width;
-    v_texcoordNormalization_and_halfWidth.z = width * 0.5;
-    positionEC.xyz += width * max(0.0, czm_metersPerPixel(positionEC)) * normalEC; // prevent artifacts when czm_metersPerPixel is negative (behind camera)
+    v_startPlaneEC_vectorLengthHalfWidth.xyz = startPlaneEC.xyz * width * 0.5;
+    v_startPlaneEC_vectorLengthHalfWidth.w = startPlaneEC.w;
+
+    width = width * max(0.0, czm_metersPerPixel(positionEC)); // width = distance to push along R
+    width = width / dot(normalEC, v_rightPlaneEC.xyz); // width = distance to push along N
+
+    // Determine if this vertex is on the "left" or "right"
+    #ifdef COLUMBUS_VIEW_2D
+        normalEC *= sign(texcoordNormalization2D.x);
+    #else
+        normalEC *= sign(endNormal_and_textureCoordinateNormalizationX.w);
+    #endif
+
+    positionEC.xyz += width * normalEC;
     gl_Position = czm_projection * positionEC;
 
     // Approximate relative screen space direction of the line.

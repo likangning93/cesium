@@ -159,12 +159,26 @@ defineSuite([
         }).contextToRender();
     });
 
-    it('has czm_lineDistance', function() {
+    fit('has czm_lineDistance', function() {
         var fs =
             'void main() { ' +
             '  vec2 point1 = vec2(0.0, 0.0); ' +
             '  vec2 point2 = vec2(1.0, 0.0); ' +
             '  vec2 point = vec2(0.5, 1.0); ' +
+            '  float expected = 1.0; ' +
+            '  float actual = czm_lineDistance(point1, point2, point); ' +
+            '  gl_FragColor = vec4(actual == expected); ' +
+            '}';
+        expect({
+            context : context,
+            fragmentShader : fs
+        }).contextToRender();
+
+        fs =
+            'void main() { ' +
+            '  vec3 point1 = vec3(0.0, 0.0, 10.0); ' +
+            '  vec3 point2 = vec3(1.0, 0.0, 10.0); ' +
+            '  vec3 point = vec3(0.5, 1.0, 10.0); ' +
             '  float expected = 1.0; ' +
             '  float actual = czm_lineDistance(point1, point2, point); ' +
             '  gl_FragColor = vec4(actual == expected); ' +
