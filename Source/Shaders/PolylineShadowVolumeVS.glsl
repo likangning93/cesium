@@ -20,7 +20,7 @@ attribute float batchId;
 varying vec4 v_startPlaneEC_vectorLengthHalfWidth;
 varying vec4 v_endPlaneEC;
 varying vec4 v_rightPlaneEC;
-varying vec4 v_forwardOffsetEC_and_ecStartX;
+varying vec4 v_ecEnd_and_ecStartX;
 varying vec4 v_texcoordNormalization_and_ecStartYZ;
 
 // For materials
@@ -38,7 +38,7 @@ void main()
     vec3 ecEnd = (czm_modelViewRelativeToEye * czm_translateRelativeToEye(vec3(0.0, endHiLo2D.xy), vec3(0.0, endHiLo2D.zw))).xyz;
 
     vec3 forwardDirectionEC = normalize(ecEnd - ecStart);
-    v_forwardOffsetEC_and_ecStartX.xyz = ecEnd - ecStart;
+    v_ecEnd_and_ecStartX.xyz = ecEnd;
 
     // Right plane
     v_rightPlaneEC.xyz = czm_normal * vec3(0.0, texcoordNormalization_and_right2D.zw);
@@ -60,7 +60,7 @@ void main()
     vec3 ecEnd = (czm_modelViewRelativeToEye * czm_translateRelativeToEye(endHi_and_startNormalZ.xyz, endLo)).xyz;
 
     vec3 forwardDirectionEC = normalize(ecEnd - ecStart);
-    v_forwardOffsetEC_and_ecStartX.xyz = ecEnd - ecStart;
+    v_ecEnd_and_ecStartX.xyz = ecEnd;
 
     // start plane
     vec4 startPlaneEC;
@@ -84,7 +84,7 @@ void main()
 #endif // PER_INSTANCE_COLOR
 
     // Pack ecStart
-    v_forwardOffsetEC_and_ecStartX.w = ecStart.x;
+    v_ecEnd_and_ecStartX.w = ecStart.x;
     v_texcoordNormalization_and_ecStartYZ.zw = ecStart.yz;
 
     // Compute a normal along which to "push" the position out, extending the miter depending on view distance.

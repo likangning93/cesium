@@ -5,7 +5,7 @@
 varying vec4 v_startPlaneEC_vectorLengthHalfWidth;
 varying vec4 v_endPlaneEC;
 varying vec4 v_rightPlaneEC;
-varying vec4 v_forwardOffsetEC_and_ecStartX;
+varying vec4 v_ecEnd_and_ecStartX;
 varying vec4 v_texcoordNormalization_and_ecStartYZ;
 
 #ifdef PER_INSTANCE_COLOR
@@ -22,9 +22,9 @@ float rayPlaneDistanceUnsafe(vec3 origin, vec3 direction, vec3 planeNormal, floa
 void main(void)
 {
     float logDepthOrDepth = czm_unpackDepth(texture2D(czm_globeDepthTexture, gl_FragCoord.xy / czm_viewport.zw));
-    vec3 forwardDirectionEC = normalize(v_forwardOffsetEC_and_ecStartX.xyz);
-    vec3 ecStart = vec3(v_forwardOffsetEC_and_ecStartX.w, v_texcoordNormalization_and_ecStartYZ.zw);
-    vec3 ecEnd = ecStart + v_forwardOffsetEC_and_ecStartX.xyz;
+    vec3 ecStart = vec3(v_ecEnd_and_ecStartX.w, v_texcoordNormalization_and_ecStartYZ.zw);
+    vec3 ecEnd = v_ecEnd_and_ecStartX.xyz;
+    vec3 forwardDirectionEC = normalize(ecEnd - ecStart);
 
     // Discard for sky
     bool shouldDiscard = logDepthOrDepth == 0.0;
