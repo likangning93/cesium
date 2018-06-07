@@ -33,21 +33,37 @@ void main(void)
     eyeCoordinate /= eyeCoordinate.w;
 
     float halfWidth = length(v_startPlaneEC_vectorLengthHalfWidth.xyz);
+    vec3 startPlaneNormal = v_startPlaneEC_vectorLengthHalfWidth.xyz / halfWidth;
     float halfMaxWidth = halfWidth * czm_metersPerPixel(eyeCoordinate);
     // Check distance of the eye coordinate against the right-facing plane
     float widthWiseDistance = czm_planeDistance(v_rightPlaneEC, eyeCoordinate.xyz);
 
     // Check distance of the eye coordinate against the forward-facing plane
-    vec4 startPlaneEC = vec4(v_startPlaneEC_vectorLengthHalfWidth.xyz / halfWidth, v_startPlaneEC_vectorLengthHalfWidth.w);
+    vec4 startPlaneEC = vec4(startPlaneNormal, v_startPlaneEC_vectorLengthHalfWidth.w);
     float distanceFromStart = rayPlaneDistanceUnsafe(eyeCoordinate.xyz, -forwardDirectionEC, startPlaneEC.xyz, startPlaneEC.w);
     float distanceFromEnd = rayPlaneDistanceUnsafe(eyeCoordinate.xyz, forwardDirectionEC, v_endPlaneEC.xyz, v_endPlaneEC.w);
 
     shouldDiscard = shouldDiscard || (abs(widthWiseDistance) > halfMaxWidth || distanceFromStart < 0.0 || distanceFromEnd < 0.0);
 
-    // Use distances for planes aligned with segment to determine if fragment is part of a rounded corner.
-    // Also to prevent skew in dashing when computing texcoords.
-    distanceFromStart = rayPlaneDistanceUnsafe(eyeCoordinate.xyz, -forwardDirectionEC, forwardDirectionEC, -dot(forwardDirectionEC, ecStart));
-    distanceFromEnd = rayPlaneDistanceUnsafe(eyeCoordinate.xyz, forwardDirectionEC, -forwardDirectionEC, -dot(-forwardDirectionEC, ecEnd));
+    // Check distance of the eye coordinate against start and end planes with normals in the right plane.
+    // For computing unskewed linear texture coordinate and for clipping extremely pointy miters
+
+    // aligned plane: cross the right plane normal with miter plane normal, then cross the result with right again to point it more "forward"
+    vec4 alignedPlane;
+
+    // start aligned plane
+    alignedPlane.xyz = cross(v_rightPlaneEC.xyz, startPlaneNormal);
+    alignedPlane.xyz = cross(alignedPlane.xyz, v_rightPlaneEC.xyz);
+    alignedPlane.w = -dot(alignedPlane.xyz, ecStart);
+    distanceFromStart = rayPlaneDistanceUnsafe(eyeCoordinate.xyz, -forwardDirectionEC, alignedPlane.xyz, alignedPlane.w);
+
+    // end aligned plane
+    alignedPlane.xyz = cross(v_rightPlaneEC.xyz, v_endPlaneEC.xyz);
+    alignedPlane.xyz = cross(alignedPlane.xyz, v_rightPlaneEC.xyz);
+    alignedPlane.w = -dot(alignedPlane.xyz, ecEnd);
+    distanceFromEnd = rayPlaneDistanceUnsafe(eyeCoordinate.xyz, forwardDirectionEC, alignedPlane.xyz, alignedPlane.w);
+
+    shouldDiscard = shouldDiscard || distanceFromStart < -halfMaxWidth || distanceFromEnd < -halfMaxWidth;
 
     // Rounding of corners
     // Compute line of intersection for nearer miter plane and right plane
