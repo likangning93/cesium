@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no">
+    <meta name="description" content="Use Viewer to start building new applications or easily embed Cesium into existing applications.">
+    <meta name="cesium-sandcastle-labels" content="Beginner, Showcases">
+    <title>Cesium Demo</title>
+    <script type="text/javascript" src="../Sandcastle-header.js"></script>
+    <script type="text/javascript" src="../../../ThirdParty/requirejs-2.1.20/require.js"></script>
+    <script type="text/javascript">
+        if(typeof require === "function") {
+            require.config({
+                baseUrl : '../../../Source',
+                waitSeconds : 120
+            });
+        }
+    </script>
+</head>
+<body class="sandcastle-loading" data-sandcastle-bucket="bucket-requirejs.html">
+<style>
+    @import url(../templates/bucket.css);
+</style>
+<div id="cesiumContainer" class="fullSize"></div>
+<div id="loadingOverlay"><h1>Loading...</h1></div>
+<div id="toolbar"></div>
+<script id="cesium_sandcastle_script">
+function startup(Cesium) {
+    'use strict';
+//Sandcastle_Begin
+var viewer = new Cesium.Viewer('cesiumContainer', {
+    imageryProvider : Cesium.createTileMapServiceImageryProvider({
+        url : Cesium.buildModuleUrl('Assets/Textures/NaturalEarthII')
+    })
+});
+var scene = viewer.scene;
+scene.logarithmicDepthBuffer = false;
+
+var whiteWhaleRectanglePrimitive;
+
+var rectangleWidth = Cesium.Math.toRadians(0.5);
+var initialLongitude = -80.1;
+var initialLatitude = 0.0;
+
+addRectanglePrimitive(Cesium.Cartographic.fromDegrees(initialLongitude, initialLatitude));
+viewer.camera.lookAt(Cesium.Cartesian3.fromDegrees(initialLongitude, initialLatitude), new Cesium.Cartesian3(150000.0, 150000.0, 150000.0));
+viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+
+function deflate(arr) {
+    for (var i = 0; i < arr.length; i++) {
+        if (arr[i] === 0.0) {
+            continue;
+        }
+        arr[i] = Math.sign(arr[i]) * Math.log2(Math.abs(arr[i]));
+    }
+}
+
+function addRectanglePrimitive(cartographic) {
+
+    var rectangle = new Cesium.Rectangle(cartographic.longitude - rectangleWidth, cartographic.latitude - rectangleWidth, cartographic.longitude + rectangleWidth, cartographic.latitude + rectangleWidth);
+
+    var attributes = Cesium.ShadowVolumeAppearance.getPlanarTextureCoordinateAttributes(rectangle, [0, 0, 0, 1, 1, 0], scene.globe.ellipsoid, scene.mapProjection);
+
+    var southWest_HIGH = attributes.southWest_HIGH.value;
+    var southWest_LOW = attributes.southWest_LOW.value;
+    var eastward = attributes.eastward.value;
+    var northward = attributes.northward.value;
+
+    deflate(southWest_HIGH);
+    deflate(southWest_LOW);
+    deflate(eastward);
+    deflate(northward);
+
+    var vertexShaderSource =
+        'attribute vec3 position3DHigh;' +
+        'attribute vec3 position3DLow;' +
+        'attribute float batchId;' +
+
+        'varying vec2 v_inversePlaneExtents;' +
+        'varying vec4 v_westPlane;' +
+        'varying vec4 v_southPlane;' +
+        'varying vec2 v_depth;' +
+
+        'float inflate(float f) {' +
+        '    if (f == 0.0) {return f;}' +
+        '    return sign(f) * pow(2.0, abs(f));' +
+        '}' +
+
+        'vec3 inflate(vec3 v) {' +
+        '    return vec3(inflate(v.x), inflate(v.y), inflate(v.z));' +
+        '}' +
+
+
+        'void main()' +
+        '{' +
+        '    gl_Position = czm_depthClampFarPlane(czm_modelViewProjectionRelativeToEye * czm_computePosition());' +
+
+        '    v_depth = gl_Position.zw;' +
+
+        '    vec3 southWestCorner = (czm_modelViewRelativeToEye * czm_translateRelativeToEye(inflate(czm_batchTable_southWest_HIGH(batchId)), inflate(czm_batchTable_southWest_LOW(batchId)))).xyz;' +
+        '    vec3 northWestCorner = czm_normal * inflate(czm_batchTable_northward(batchId)) + southWestCorner;' +
+        '    vec3 southEastCorner = czm_normal * inflate(czm_batchTable_eastward(batchId)) + southWestCorner;' +
+
+        '    vec3 eastWard = southEastCorner - southWestCorner;' +
+        '    float eastExtent = length(eastWard);' +
+        '    eastWard /= eastExtent;' +
+
+        '    vec3 northWard = northWestCorner - southWestCorner;' +
+        '    float northExtent = length(northWard);' +
+        '    northWard /= northExtent;' +
+
+        '    v_westPlane = vec4(eastWard, -dot(eastWard, southWestCorner));' +
+        '    v_southPlane = vec4(northWard, -dot(northWard, southWestCorner));' +
+        '    v_inversePlaneExtents = vec2(1.0 / eastExtent, 1.0 / northExtent);' +
+        '}';
+
+    var fragmentShaderSource =
+        'varying vec2 v_inversePlaneExtents;' +
+        'varying vec4 v_westPlane;' +
+        'varying vec4 v_southPlane;' +
+        'varying vec2 v_depth;' +
+
+        'void main()' +
+        '{' +
+        '    float logDepthOrDepth = mix(czm_depthRange.near, czm_depthRange.far, 0.5 * v_depth.x / v_depth.y + 0.5);' +
+        '    vec4 eyeCoordinate = czm_windowToEyeCoordinates(gl_FragCoord.xy, logDepthOrDepth);' +
+        '    float u = czm_planeDistance(v_westPlane,  eyeCoordinate.xyz / eyeCoordinate.w) * v_inversePlaneExtents.x;' +
+        '    float v = czm_planeDistance(v_southPlane, eyeCoordinate.xyz / eyeCoordinate.w) * v_inversePlaneExtents.y;' +
+
+        '    vec4 color = vec4(u, v, 0.0, 1.0);' +
+        '    if (0.0 <= u && u <= 1.0 && 0.0 <= v && v <= 1.0) {' +
+        '        gl_FragColor = color;' +
+        '    } else { ' +
+        '        gl_FragColor = vec4(0.0, 0.0, 1.0, 1.0);' +
+        '    }' +
+        '}';
+
+    whiteWhaleRectanglePrimitive = new Cesium.Primitive({
+        geometryInstances : new Cesium.GeometryInstance({
+            geometry : new Cesium.RectangleGeometry({
+                rectangle : rectangle
+            }),
+            attributes : attributes
+        }),
+        appearance : new Cesium.MaterialAppearance({
+            vertexShaderSource : vertexShaderSource,
+            fragmentShaderSource : fragmentShaderSource,
+        })
+    });
+    scene.primitives.add(whiteWhaleRectanglePrimitive);
+}
+
+var handler = new Cesium.ScreenSpaceEventHandler(scene.canvas);
+handler.setInputAction(function(movement) {
+    scene.primitives.remove(whiteWhaleRectanglePrimitive);
+    if (scene.mode !== Cesium.SceneMode.MORPHING) {
+        if (scene.pickPositionSupported) {
+            var cartesian = viewer.camera.pickEllipsoid(movement.position);
+
+            if (Cesium.defined(cartesian)) {
+                var cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+                addRectanglePrimitive(cartographic);
+            }
+        }
+    }
+}, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+//Sandcastle_End
+    Sandcastle.finishedLoading();
+}
+if (typeof Cesium !== "undefined") {
+    startup(Cesium);
+} else if (typeof require === "function") {
+    require(["Cesium"], startup);
+}
+</script>
+</body>
+</html>
