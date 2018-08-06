@@ -150,16 +150,18 @@ define([
      * @param {Number} y The Y coordinate of the tile for which to create the terrain data.
      * @param {Number} level The level of the tile for which to create the terrain data.
      * @param {Number} [exaggeration=1.0] The scale used to exaggerate the terrain.
+     * @param {SerializedMapProjection} serializedMapProjection Serialized map projection.
      * @returns {Promise.<TerrainMesh>|undefined} A promise for the terrain mesh, or undefined if too many
      *          asynchronous mesh creations are already in progress and the operation should
      *          be retried later.
      */
-    GoogleEarthEnterpriseTerrainData.prototype.createMesh = function(tilingScheme, x, y, level, exaggeration, mapProjection) {
+    GoogleEarthEnterpriseTerrainData.prototype.createMesh = function(tilingScheme, x, y, level, exaggeration, serializedMapProjection) {
         //>>includeStart('debug', pragmas.debug);
         Check.typeOf.object('tilingScheme', tilingScheme);
         Check.typeOf.number('x', x);
         Check.typeOf.number('y', y);
         Check.typeOf.number('level', level);
+        Check.defined('serializedMapProjection', serializedMapProjection);
         //>>includeEnd('debug');
 
         var ellipsoid = tilingScheme.ellipsoid;
@@ -169,15 +171,6 @@ define([
 
         // Compute the center of the tile for RTC rendering.
         var center = ellipsoid.cartographicToCartesian(Rectangle.center(rectangleScratch));
-
-        var wkt;
-        var projectionUrl;
-        var projectionFunctionName;
-        if (defined(mapProjection)) {
-            wkt = mapProjection.wellKnownText;
-            projectionUrl = mapProjection._url;
-            projectionFunctionName = mapProjection._functionName;
-        }
 
         var levelZeroMaxError = 40075.16; // From Google's Doc
         var thisLevelMaxError = levelZeroMaxError / (1 << level);
@@ -194,9 +187,7 @@ define([
             includeWebMercatorT : true,
             negativeAltitudeExponentBias: this._negativeAltitudeExponentBias,
             negativeElevationThreshold: this._negativeElevationThreshold,
-            wkt : wkt,
-            projectionUrl : projectionUrl,
-            projectionFunctionName : projectionFunctionName
+            serializedMapProjection : serializedMapProjection
         });
 
         if (!defined(verticesPromise)) {

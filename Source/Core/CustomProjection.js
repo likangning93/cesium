@@ -105,6 +105,32 @@ define([
             get : function() {
                 return this._readyPromise;
             }
+        },
+        /**
+         * Gets the absolute URL for the file that the CustomProjection is loading.
+         *
+         * @memberOf CustomProjection.prototype
+         *
+         * @type {String}
+         * @readonly
+         */
+        url : {
+            get : function() {
+                return this._url;
+            }
+        },
+        /**
+         * Gets the function name for factory function in the file that the CustomProjection is loading.
+         *
+         * @memberOf CustomProjection.prototype
+         *
+         * @type {String}
+         * @readonly
+         */
+        functionName : {
+            get : function() {
+                return this._functionName;
+            }
         }
     });
 

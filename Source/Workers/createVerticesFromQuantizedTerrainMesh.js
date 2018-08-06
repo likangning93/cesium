@@ -1,39 +1,35 @@
 define([
-        '../ThirdParty/when',
         '../Core/AttributeCompression',
         '../Core/AxisAlignedBoundingBox',
         '../Core/BoundingSphere',
         '../Core/Cartesian2',
         '../Core/Cartesian3',
         '../Core/Cartographic',
-        '../Core/CustomProjection',
         '../Core/defined',
         '../Core/Ellipsoid',
         '../Core/IndexDatatype',
         '../Core/Math',
         '../Core/Matrix4',
         '../Core/OrientedBoundingBox',
-        '../Core/Proj4Projection',
+        '../Core/SerializedMapProjection',
         '../Core/TerrainEncoding',
         '../Core/Transforms',
         '../Core/WebMercatorProjection',
         './createTaskProcessorWorker'
     ], function(
-        when,
         AttributeCompression,
         AxisAlignedBoundingBox,
         BoundingSphere,
         Cartesian2,
         Cartesian3,
         Cartographic,
-        CustomProjection,
         defined,
         Ellipsoid,
         IndexDatatype,
         CesiumMath,
         Matrix4,
         OrientedBoundingBox,
-        Proj4Projection,
+        SerializedMapProjection,
         TerrainEncoding,
         Transforms,
         WebMercatorProjection,
@@ -43,17 +39,7 @@ define([
     var maxShort = 32767;
 
     function createVerticesFromQuantizedTerrainMesh(parameters, transferableObjects) {
-        var mapProjection;
-        var projectionPromise = when.resolve();
-        if (defined(parameters.wkt)) {
-            mapProjection = new Proj4Projection(parameters.wkt);
-        }
-        if (defined(parameters.projectionUrl) && defined(parameters.projectionFunctionName)) {
-            mapProjection = new CustomProjection(parameters.projectionUrl, parameters.projectionFunctionName);
-            projectionPromise = mapProjection.readyPromise;
-        }
-
-        return projectionPromise.then(function() {
+        return SerializedMapProjection.deserialize(parameters.serializedMapProjection).then(function(mapProjection) {
             return implementation(parameters, transferableObjects, mapProjection);
         });
     }
@@ -93,7 +79,7 @@ define([
         var fromENU = Transforms.eastNorthUpToFixedFrame(center, ellipsoid);
         var toENU = Matrix4.inverseTransformation(fromENU, new Matrix4());
 
-        var hasCustomProjection = defined(mapProjection);
+        var hasCustomProjection = !mapProjection.isEquatorialCylindrical;
 
         var southMercatorY;
         var oneOverMercatorHeight;
@@ -335,7 +321,7 @@ define([
             east += CesiumMath.TWO_PI;
         }
 
-        var hasCustomProjection = defined(mapProjection);
+        var hasCustomProjection = !mapProjection.isEquatorialCylindrical;
 
         for (var i = start; i !== end; i += increment) {
             var index = edgeVertices[i];

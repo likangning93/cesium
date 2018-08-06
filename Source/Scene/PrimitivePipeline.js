@@ -1,14 +1,11 @@
 define([
-        '../ThirdParty/when',
         '../Core/BoundingSphere',
         '../Core/ComponentDatatype',
-        '../Core/CustomProjection',
         '../Core/defaultValue',
         '../Core/defined',
         '../Core/DeveloperError',
         '../Core/Ellipsoid',
         '../Core/FeatureDetection',
-        '../Core/GeographicProjection',
         '../Core/Geometry',
         '../Core/GeometryAttribute',
         '../Core/GeometryAttributes',
@@ -16,19 +13,15 @@ define([
         '../Core/IndexDatatype',
         '../Core/Matrix4',
         '../Core/OffsetGeometryInstanceAttribute',
-        '../Core/Proj4Projection',
-        '../Core/WebMercatorProjection'
+        '../Core/SerializedMapProjection'
     ], function(
-        when,
         BoundingSphere,
         ComponentDatatype,
-        CustomProjection,
         defaultValue,
         defined,
         DeveloperError,
         Ellipsoid,
         FeatureDetection,
-        GeographicProjection,
         Geometry,
         GeometryAttribute,
         GeometryAttributes,
@@ -36,8 +29,7 @@ define([
         IndexDatatype,
         Matrix4,
         OffsetGeometryInstanceAttribute,
-        Proj4Projection,
-        WebMercatorProjection) {
+        SerializedMapProjection) {
     'use strict';
 
     // Bail out if the browser doesn't support typed arrays, to prevent the setup function
@@ -622,22 +614,17 @@ define([
             transferableObjects.push(createGeometryResults[i].packedData.buffer);
         }
 
-        var projection = parameters.projection;
-
         return {
             createGeometryResults : parameters.createGeometryResults,
             packedInstances : packInstancesForCombine(parameters.instances, transferableObjects),
             ellipsoid : parameters.ellipsoid,
-            isGeographic : projection instanceof GeographicProjection,
             elementIndexUintSupported : parameters.elementIndexUintSupported,
             scene3DOnly : parameters.scene3DOnly,
             vertexCacheOptimize : parameters.vertexCacheOptimize,
             compressVertices : parameters.compressVertices,
             modelMatrix : parameters.modelMatrix,
             createPickOffsets : parameters.createPickOffsets,
-            wkt : projection.wellKnownText,
-            projectionUrl : projection._url,
-            projectionFunctionName : projection._functionName
+            serializedMapProjection : parameters.serializedMapProjection
         };
     };
 
@@ -662,18 +649,8 @@ define([
         }
 
         var ellipsoid = Ellipsoid.clone(packedParameters.ellipsoid);
-        var projection;
-        var projectionPromise = when.resolve();
-        if (defined(packedParameters.wkt)) {
-            projection = new Proj4Projection(packedParameters.wkt);
-        } else if (defined(packedParameters.projectionUrl) && defined(packedParameters.projectionFunctionName)) {
-            projection = new CustomProjection(packedParameters.projectionUrl, packedParameters.projectionFunctionName);
-            projectionPromise = projection.readyPromise;
-        } else {
-            projection = packedParameters.isGeographic ? new GeographicProjection(ellipsoid) : new WebMercatorProjection(ellipsoid);
-        }
 
-        return projectionPromise.then(function() {
+        return SerializedMapProjection.deserialize(packedParameters.serializedMapProjection).then(function(projection) {
             return {
                 instances : instances,
                 ellipsoid : ellipsoid,

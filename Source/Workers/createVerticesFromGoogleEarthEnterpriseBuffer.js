@@ -1,11 +1,9 @@
 define([
-        '../ThirdParty/when',
         '../Core/AxisAlignedBoundingBox',
         '../Core/BoundingSphere',
         '../Core/Cartesian2',
         '../Core/Cartesian3',
         '../Core/Cartographic',
-        '../Core/CustomProjection',
         '../Core/defaultValue',
         '../Core/defined',
         '../Core/Ellipsoid',
@@ -13,21 +11,19 @@ define([
         '../Core/Math',
         '../Core/Matrix4',
         '../Core/OrientedBoundingBox',
-        '../Core/Proj4Projection',
         '../Core/Rectangle',
         '../Core/RuntimeError',
+        '../Core/SerializedMapProjection',
         '../Core/TerrainEncoding',
         '../Core/Transforms',
         '../Core/WebMercatorProjection',
         './createTaskProcessorWorker'
     ], function(
-        when,
         AxisAlignedBoundingBox,
         BoundingSphere,
         Cartesian2,
         Cartesian3,
         Cartographic,
-        CustomProjection,
         defaultValue,
         defined,
         Ellipsoid,
@@ -35,9 +31,9 @@ define([
         CesiumMath,
         Matrix4,
         OrientedBoundingBox,
-        Proj4Projection,
         Rectangle,
         RuntimeError,
+        SerializedMapProjection,
         TerrainEncoding,
         Transforms,
         WebMercatorProjection,
@@ -66,17 +62,7 @@ define([
         parameters.ellipsoid = Ellipsoid.clone(parameters.ellipsoid);
         parameters.rectangle = Rectangle.clone(parameters.rectangle);
 
-        var mapProjection;
-        var projectionPromise = when.resolve();
-        if (defined(parameters.wkt)) {
-            mapProjection = new Proj4Projection(parameters.wkt);
-        }
-        if (defined(parameters.projectionUrl) && defined(parameters.projectionFunctionName)) {
-            mapProjection = new CustomProjection(parameters.projectionUrl, parameters.projectionFunctionName);
-            projectionPromise = mapProjection.readyPromise;
-        }
-
-        return projectionPromise.then(function() {
+        return SerializedMapProjection.deserialize(parameters.serializedMapProjection).then(function(mapProjection) {
             var statistics = processBuffer(parameters.buffer, parameters.relativeToCenter, parameters.ellipsoid,
                 parameters.rectangle, parameters.nativeRectangle, parameters.exaggeration, parameters.skirtHeight,
                 parameters.includeWebMercatorT, parameters.negativeAltitudeExponentBias, parameters.negativeElevationThreshold,
@@ -116,7 +102,7 @@ define([
         var geographicNorth;
         var rectangleWidth, rectangleHeight;
 
-        var hasCustomProjection = defined(mapProjection);
+        var hasCustomProjection = !mapProjection.isEquatorialCylindrical;
 
         if (!defined(rectangle)) {
             geographicWest = CesiumMath.toRadians(nativeRectangle.west);
@@ -465,7 +451,7 @@ define([
 
     function addSkirt(positions, heights, uvs, webMercatorTs, indices, skirtOptions,
                       borderPoints, fudgeFactor, eastOrWest, cornerFudge, positions2D, mapProjection) {
-        var hasCustomProjection = defined(mapProjection);
+        var hasCustomProjection = !mapProjection.isEquatorialCylindrical;
 
         var count = borderPoints.length;
         for (var j = 0; j < count; ++j) {

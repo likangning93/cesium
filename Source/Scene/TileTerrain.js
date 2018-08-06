@@ -213,7 +213,7 @@ define([
         var tilingScheme = terrainProvider.tilingScheme;
 
         var terrainData = tileTerrain.data;
-        var meshPromise = terrainData.createMesh(tilingScheme, x, y, level, frameState.terrainExaggeration, frameState.mapProjection);
+        var meshPromise = terrainData.createMesh(tilingScheme, x, y, level, frameState.terrainExaggeration, frameState.serializedMapProjection);
 
         if (!defined(meshPromise)) {
             // Postponed.

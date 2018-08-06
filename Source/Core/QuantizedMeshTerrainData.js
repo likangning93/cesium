@@ -3,6 +3,7 @@ define([
         './BoundingSphere',
         './Cartesian2',
         './Cartesian3',
+        './Check',
         './defaultValue',
         './defined',
         './defineProperties',
@@ -19,6 +20,7 @@ define([
         BoundingSphere,
         Cartesian2,
         Cartesian3,
+        Check,
         defaultValue,
         defined,
         defineProperties,
@@ -259,34 +261,18 @@ define([
      *          asynchronous mesh creations are already in progress and the operation should
      *          be retried later.
      */
-    QuantizedMeshTerrainData.prototype.createMesh = function(tilingScheme, x, y, level, exaggeration, mapProjection) {
+    QuantizedMeshTerrainData.prototype.createMesh = function(tilingScheme, x, y, level, exaggeration, serializedMapProjection) {
         //>>includeStart('debug', pragmas.debug);
-        if (!defined(tilingScheme)) {
-            throw new DeveloperError('tilingScheme is required.');
-        }
-        if (!defined(x)) {
-            throw new DeveloperError('x is required.');
-        }
-        if (!defined(y)) {
-            throw new DeveloperError('y is required.');
-        }
-        if (!defined(level)) {
-            throw new DeveloperError('level is required.');
-        }
+        Check.typeOf.object('tilingScheme', tilingScheme);
+        Check.typeOf.number('x', x);
+        Check.typeOf.number('y', y);
+        Check.typeOf.number('level', level);
+        Check.defined('serializedMapProjection', serializedMapProjection);
         //>>includeEnd('debug');
 
         var ellipsoid = tilingScheme.ellipsoid;
         var rectangle = tilingScheme.tileXYToRectangle(x, y, level);
         exaggeration = defaultValue(exaggeration, 1.0);
-
-        var wkt;
-        var projectionUrl;
-        var projectionFunctionName;
-        if (defined(mapProjection)) {
-            wkt = mapProjection.wellKnownText;
-            projectionUrl = mapProjection._url;
-            projectionFunctionName = mapProjection._functionName;
-        }
 
         var verticesPromise = createMeshTaskProcessor.scheduleTask({
             minimumHeight : this._minimumHeight,
@@ -307,9 +293,7 @@ define([
             relativeToCenter : this._boundingSphere.center,
             ellipsoid : ellipsoid,
             exaggeration : exaggeration,
-            wkt : wkt,
-            projectionUrl : projectionUrl,
-            projectionFunctionName : projectionFunctionName
+            serializedMapProjection : serializedMapProjection
         });
 
         if (!defined(verticesPromise)) {
