@@ -35,7 +35,6 @@ define([
 
         this.isMercator = mapProjection instanceof WebMercatorProjection;
         this.isGeographic = mapProjection instanceof GeographicProjection;
-        this.isGeographic = mapProjection instanceof GeographicProjection;
         this.wellKnownText = mapProjection.wellKnownText;
         this.url = mapProjection.url;
         this.functionName = mapProjection.functionName;
@@ -50,6 +49,10 @@ define([
      * @returns {Promise.<CustomProjection>} A Promise that resolves to a MapProjection, or rejects if the SerializedMapProjection is malformed.
      */
     SerializedMapProjection.deserialize = function(serializedMapProjection) {
+        //>>includeStart('debug', pragmas.debug);
+        Check.defined('serializedMapProjection', serializedMapProjection);
+        //>>includeEnd('debug');
+
         var ellipsoid = Ellipsoid.unpack(serializedMapProjection.packedEllipsoid);
         var projection;
 

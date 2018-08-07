@@ -7,7 +7,6 @@ define([
         './Check',
         './defaultValue',
         './defined',
-        './DeveloperError',
         './Ellipsoid',
         './EllipsoidalOccluder',
         './freezeObject',
@@ -27,7 +26,6 @@ define([
         Check,
         defaultValue,
         defined,
-        DeveloperError,
         Ellipsoid,
         EllipsoidalOccluder,
         freezeObject,
@@ -72,7 +70,6 @@ define([
     var relativeToCenter2dScratch = new Cartesian2();
     var projectedCartesian3Scratch = new Cartesian3();
 
-    // TODO: doc for includeWebMercatorT?
     /**
      * Fills an array of vertices from a heightmap image.
      *
@@ -122,8 +119,9 @@ define([
      * @param {Boolean} [options.structure.isBigEndian=false] Indicates endianness of the elements in the buffer when the
      *                  stride property is greater than 1.  If this property is false, the first element is the
      *                  low-order element.  If it is true, the first element is the high-order element.
+     * @param {Boolean} [options.includeWebMercatorT=false] Indicates that the vertices should include a T coordinate to compensate for Web Mercator Latitude.
      *
-     * @param {MapProjection} mapProjection Map Projection for terrain positions in a 2.5D projection
+     * @param {MapProjection} mapProjection MapProjection for projecting for terrain positions to the target 2D coordinate system.
      * @example
      * var width = 5;
      * var height = 5;
@@ -145,18 +143,12 @@ define([
      */
     HeightmapTessellator.computeVertices = function(options, mapProjection) {
         //>>includeStart('debug', pragmas.debug);
-        if (!defined(options) || !defined(options.heightmap)) {
-            throw new DeveloperError('options.heightmap is required.');
-        }
-        if (!defined(options.width) || !defined(options.height)) {
-            throw new DeveloperError('options.width and options.height are required.');
-        }
-        if (!defined(options.nativeRectangle)) {
-            throw new DeveloperError('options.nativeRectangle is required.');
-        }
-        if (!defined(options.skirtHeight)) {
-            throw new DeveloperError('options.skirtHeight is required.');
-        }
+        Check.defined('options', options);
+        Check.defined('options.heightmap', options.heightmap);
+        Check.typeOf.number('options.width', options.width);
+        Check.typeOf.number('options.height', options.height);
+        Check.defined('options.nativeRectangle', options.nativeRectangle);
+        Check.typeOf.number('options.skirtHeight', options.skirtHeight);
         Check.defined('mapProjection', mapProjection);
         //>>includeEnd('debug');
 
@@ -165,7 +157,7 @@ define([
         // In particular, the functionality of Ellipsoid.cartographicToCartesian
         // is inlined.
 
-        var hasCustomProjection = !mapProjection.isEquatorialCylindrical;
+        var nonEquatorialCylindricalProjection = !mapProjection.isEquatorialCylindrical;
 
         var cos = Math.cos;
         var sin = Math.sin;
@@ -219,13 +211,17 @@ define([
         var includeWebMercatorT = defaultValue(options.includeWebMercatorT, false);
 
         var relativeToCenter2D;
-        if (hasCustomProjection) {
-            var cartographicRTC = ellipsoid.cartesianToCartographic(relativeToCenter, cartographicScratch);
-            cartographicRTC.height = 0.0;
-            var projectedRTC = mapProjection.project(cartographicRTC, projectedCartesian3Scratch);
-            relativeToCenter2D = relativeToCenter2dScratch;
-            relativeToCenter2D.x = projectedRTC.x;
-            relativeToCenter2D.y = projectedRTC.y;
+        if (nonEquatorialCylindricalProjection) {
+            if (hasRelativeToCenter) {
+                var cartographicRTC = ellipsoid.cartesianToCartographic(relativeToCenter, cartographicScratch);
+                cartographicRTC.height = 0.0;
+                var projectedRTC = mapProjection.project(cartographicRTC, projectedCartesian3Scratch);
+                relativeToCenter2D = relativeToCenter2dScratch;
+                relativeToCenter2D.x = projectedRTC.x;
+                relativeToCenter2D.y = projectedRTC.y;
+            } else {
+                relativeToCenter2D = Cartesian2.clone(Cartesian2.ZERO, relativeToCenter2dScratch);
+            }
         }
 
         var structure = defaultValue(options.structure, HeightmapTessellator.DEFAULT_STRUCTURE);
@@ -284,7 +280,7 @@ define([
         var heights = new Array(size);
         var uvs = new Array(size);
         var positions2D;
-        if (hasCustomProjection) {
+        if (nonEquatorialCylindricalProjection) {
             positions2D = new Array(size);
         }
 
@@ -419,7 +415,7 @@ define([
                 positions[index] = position;
                 heights[index] = heightSample;
 
-                if (hasCustomProjection) {
+                if (nonEquatorialCylindricalProjection) {
                     var cartographic = cartographicScratch;
                     cartographic.height = 0.0;
                     cartographic.longitude = longitude;
@@ -463,7 +459,7 @@ define([
 
         var bufferIndex = 0;
         var j;
-        if (hasCustomProjection) {
+        if (nonEquatorialCylindricalProjection) {
             for (j = 0; j < size; ++j) {
                 bufferIndex = encoding.encode(vertices, bufferIndex, positions[j], uvs[j], heights[j], undefined, webMercatorTs[j], positions2D[j]);
             }

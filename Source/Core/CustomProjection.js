@@ -150,6 +150,7 @@ define([
         if (!this._ready) {
             throw new DeveloperError('CustomProjection is not loaded. User CustomProjection.readyPromise or waith for CustomProjection.ready to be true.');
         }
+        Check.defined('cartographic', cartographic);
         //>>includeEnd('debug');
 
         if (!defined(result)) {
@@ -181,6 +182,7 @@ define([
         if (!this._ready) {
             throw new DeveloperError('CustomProjection is not loaded. User CustomProjection.readyPromise or waith for CustomProjection.ready to be true.');
         }
+        Check.defined('cartesian', cartesian);
         //>>includeEnd('debug');
 
         if (!defined(result)) {

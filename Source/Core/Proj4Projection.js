@@ -3,6 +3,7 @@ define([
         './Cartesian3',
         './Cartographic',
         './Math',
+        './Check',
         './defaultValue',
         './defined',
         './defineProperties',
@@ -12,6 +13,7 @@ define([
         Cartesian3,
         Cartographic,
         CesiumMath,
+        Check,
         defaultValue,
         defined,
         defineProperties,
@@ -20,15 +22,15 @@ define([
 
     /**
      * MapProjection using proj4js. This projection is only to be used with Ellipsoid.WGS84.
-     * Users should exercise caution when using local-area projections. Local area projections may fail
-     * outside their specified boundaries, potentially causing visual artifacts or unexpected camera behavior.
+     * Users should exercise caution when using local-area projections, as local area projections
+     * may produce unexpected results outside their specified boundaries.
      *
-     * Custom or unusual projections may result in proj4js failing to converge for some coordinates.
+     * Assumes Ellipsoid WGS84.
      *
      * @alias Proj4Projection
      * @constructor
      *
-     * @param {String} [wellKnownText] proj4js well known text specifying the projection. Defaults to 'EPSG:3857' web mercator.
+     * @param {String} [wellKnownText] proj4js well known text specifying the projection. Defaults to EPSG:3857, web mercator.
      */
     function Proj4Projection(wellKnownText) {
         this.ellipsoid = Ellipsoid.WGS84;
@@ -82,6 +84,10 @@ define([
      *          created and returned.
      */
     Proj4Projection.prototype.project = function(cartographic, result) {
+        //>>includeStart('debug', pragmas.debug);
+        Check.defined('cartographic', cartographic);
+        //>>includeEnd('debug');
+
         if (!defined(result)) {
             result = new Cartesian3();
         }
@@ -121,6 +127,10 @@ define([
      *          created and returned.
      */
     Proj4Projection.prototype.unproject = function(cartesian, result) {
+        //>>includeStart('debug', pragmas.debug);
+        Check.defined('cartesian', cartesian);
+        //>>includeEnd('debug');
+
         if (!defined(result)) {
             result = new Cartographic();
         }

@@ -13,6 +13,7 @@ define([
         './defineProperties',
         './EllipsoidGeodesic',
         './EncodedCartesian3',
+        './GeographicProjection',
         './Geometry',
         './GeometryAttribute',
         './IntersectionTests',
@@ -35,6 +36,7 @@ define([
         defineProperties,
         EllipsoidGeodesic,
         EncodedCartesian3,
+        GeographicProjection,
         Geometry,
         GeometryAttribute,
         IntersectionTests,
@@ -46,6 +48,7 @@ define([
 
     var MITER_BREAK_SMALL = Math.cos(CesiumMath.toRadians(30.0));
     var MITER_BREAK_LARGE = Math.cos(CesiumMath.toRadians(150.0));
+    var defaultProjection = new GeographicProjection();
 
     // Initial heights for constructing the wall.
     // Keeping WALL_INITIAL_MIN_HEIGHT near the ellipsoid surface helps
@@ -121,7 +124,7 @@ define([
          */
         this.loop = defaultValue(options.loop, false);
 
-        this._projection = undefined;
+        this._projection = defaultProjection;
         this._workerName = 'createGroundPolylineGeometry';
 
         // Used by GroundPolylinePrimitive to signal worker that scenemode is 3D only.

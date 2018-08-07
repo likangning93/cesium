@@ -275,7 +275,7 @@ define([
                 westNormal = negativeUnitY;
                 eastNormal = Cartesian3.UNIT_Y;
                 southNormal = negativeUnitZ;
-                northNormal = Cartesian3.UNIT_Z; // TODO: technically has to change for unusual projections
+                northNormal = Cartesian3.UNIT_Z;
             }
 
             var vectorFromSouthwestCorner = Cartesian3.subtract(cameraCartesianPosition, southwestCornerCartesian, vectorScratch);

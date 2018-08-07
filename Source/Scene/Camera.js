@@ -226,7 +226,6 @@ define([
         this._projection = projection;
 
         // Check the four corners of the projection and the four edge-centers.
-        // TODO: this might need to be user-set for weirder projections.
         var maxCoord = new Cartesian3();
         var cartographicExtreme = maxCoordCartographicScratch;
 
@@ -234,14 +233,18 @@ define([
         var halfMapHeight = 0.0;
 
         for (var x = -1; x < 2; x++) {
-                for (var y = -1; y < 2; y++) {
-                    cartographicExtreme.longitude = CesiumMath.PI * x;
-                    cartographicExtreme.latitude = CesiumMath.PI_OVER_TWO * y;
-                    projection.project(cartographicExtreme, maxCoord);
-
-                    halfMapWidth = Math.max(halfMapWidth, Math.abs(maxCoord.x));
-                    halfMapHeight = Math.max(halfMapHeight, Math.abs(maxCoord.y));
+            for (var y = -1; y < 2; y++) {
+                if (x === 0 && y === 0) {
+                    continue;
                 }
+
+                cartographicExtreme.longitude = CesiumMath.PI * x;
+                cartographicExtreme.latitude = CesiumMath.PI_OVER_TWO * y;
+                projection.project(cartographicExtreme, maxCoord);
+
+                halfMapWidth = Math.max(halfMapWidth, Math.abs(maxCoord.x));
+                halfMapHeight = Math.max(halfMapHeight, Math.abs(maxCoord.y));
+            }
         }
         maxCoord.x = halfMapWidth;
         maxCoord.y = halfMapHeight;

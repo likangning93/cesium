@@ -255,13 +255,13 @@ define([
      * @param {Number} x The X coordinate of the tile for which to create the terrain data.
      * @param {Number} y The Y coordinate of the tile for which to create the terrain data.
      * @param {Number} level The level of the tile for which to create the terrain data.
+     * @param {SerializedMapProjection} serializedMapProjection Serialized map projection.
      * @param {Number} [exaggeration=1.0] The scale used to exaggerate the terrain.
-     * @param {MapProjection} [mapProjection] The scene's map projection.
      * @returns {Promise.<TerrainMesh>|undefined} A promise for the terrain mesh, or undefined if too many
      *          asynchronous mesh creations are already in progress and the operation should
      *          be retried later.
      */
-    QuantizedMeshTerrainData.prototype.createMesh = function(tilingScheme, x, y, level, exaggeration, serializedMapProjection) {
+    QuantizedMeshTerrainData.prototype.createMesh = function(tilingScheme, x, y, level, serializedMapProjection, exaggeration) {
         //>>includeStart('debug', pragmas.debug);
         Check.typeOf.object('tilingScheme', tilingScheme);
         Check.typeOf.number('x', x);
