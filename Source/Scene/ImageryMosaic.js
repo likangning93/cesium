@@ -1,5 +1,8 @@
 define([
-        '../Core/Bitmap',
+        '../Core/Cartesian3',
+        '../Core/Cartesian4',
+        '../Core/Cartographic',
+        '../Core/Math',
         '../Core/Check',
         '../Core/Color',
         '../Core/Credit',
@@ -9,14 +12,19 @@ define([
         '../Core/DeveloperError',
         '../Core/FeatureDetection',
         '../Core/getAbsoluteUri',
+        '../Core/Matrix4',
         '../Core/Rectangle',
         '../Core/TaskProcessor',
         '../Core/SerializedMapProjection',
         '../ThirdParty/when',
         './BitmapImageryProvider',
-        './ImageryLayer'
+        './ImageryLayer',
+        './SceneMode'
     ], function(
-        Bitmap,
+        Cartesian3,
+        Cartesian4,
+        Cartographic,
+        CesiumMath,
         Check,
         Color,
         Credit,
@@ -26,12 +34,14 @@ define([
         DeveloperError,
         FeatureDetection,
         getAbsoluteUri,
+        Matrix4,
         Rectangle,
         TaskProcessor,
         SerializedMapProjection,
         when,
         BitmapImageryProvider,
-        ImageryLayer) {
+        ImageryLayer,
+        SceneMode) {
     'use strict';
 
     var insetWaitFrames = 3;
@@ -118,6 +128,26 @@ define([
         this._boundsRectangle;
         this._debugShowBoundsRectangle = false;
 
+        var longitudeSamplingResolution = 20;
+        var latitudeSamplingResolution = 20;
+        var samplePointsCount = longitudeSamplingResolution * latitudeSamplingResolution;
+        var samplePoints2D = new Array(samplePointsCount); // TODO: maybe resolution should be configurable?
+        var samplePoints3D = new Array(samplePointsCount);
+        var samplePointsSurfaceNormals = new Array(samplePointsCount);
+        var samplePointsCartographic = new Array(samplePointsCount);
+
+        for (i = 0; i < samplePointsCount; i++) {
+            samplePoints2D[i] = new Cartesian3();
+            samplePoints3D[i] = new Cartesian3();
+            samplePointsSurfaceNormals[i] = new Cartesian3();
+            samplePointsCartographic[i] = new Cartographic();
+        }
+
+        this._samplePoints2D = samplePoints2D;
+        this._samplePoints3D = samplePoints3D;
+        this._samplePointsSurfaceNormals = samplePointsSurfaceNormals;
+        this._samplePointsCartographic = samplePointsCartographic;
+
         var that = this;
 
         var urlGroups = new Array(concurrency);
@@ -148,7 +178,7 @@ define([
             });
         }
 
-        when.all(initializationPromises)
+        this.readyPromise = when.all(initializationPromises)
             .then(function(rectangles) {
                 // Merge rectangles
                 var thatRectangle = Rectangle.clone(rectangles[0], that._rectangle);
@@ -160,6 +190,26 @@ define([
                     thatRectangle.south = Math.min(thatRectangle.south, rectangle.south);
                 }
                 that._rectangle = thatRectangle;
+
+                // Compute points in a grid over the total mosaic area
+                var projection = viewer.scene.mapProjection;
+                var ellipsoid = projection.ellipsoid;
+                var west = thatRectangle.west;
+                var south = thatRectangle.south;
+                var longitudeStep = thatRectangle.width / (longitudeSamplingResolution - 1);
+                var latitudeStep = thatRectangle.height / (latitudeSamplingResolution - 1);
+
+                for (var latIndex = 0; latIndex < latitudeSamplingResolution; latIndex++) {
+                    for (var longIndex = 0; longIndex < longitudeSamplingResolution; longIndex++) {
+                        var pointIndex = latIndex * longitudeSamplingResolution + longIndex;
+                        var samplePointCartographic = samplePointsCartographic[pointIndex];
+                        samplePointCartographic.longitude = west + longIndex * longitudeStep;
+                        samplePointCartographic.latitude = south + latIndex * latitudeStep;
+                        projection.project(samplePointCartographic, samplePoints2D[pointIndex]);
+                        ellipsoid.cartographicToCartesian(samplePointCartographic, samplePoints3D[pointIndex]);
+                        ellipsoid.geodeticSurfaceNormalCartographic(samplePointCartographic, samplePointsSurfaceNormals[pointIndex]);
+                    }
+                }
 
                 // Create the full-coverage version
                 return requestProjection(taskProcessors, 1024, 1024, thatRectangle);
@@ -249,7 +299,9 @@ define([
         });
     };
 
+    var samplePoint3Scratch = new Cartesian3();
     ImageryMosaic.prototype.refresh = function(scene) {
+/*
         // Compute an approximate geographic rectangle that we're rendering
         var quadtreePrimitive = scene.globe._surface;
         var quadtreeTilesToRender = quadtreePrimitive._tilesToRender;
@@ -270,6 +322,39 @@ define([
             renderingBounds.east = Math.max(renderingBounds.east, tileRectangle.east);
             renderingBounds.south = Math.min(renderingBounds.south, tileRectangle.south);
             renderingBounds.north = Math.max(renderingBounds.north, tileRectangle.north);
+        }
+*/
+        // Compute an approximate geographic rectangle that we should render using the sample points we precomputed
+        var renderingBounds = new Rectangle(); // Create new to avoid race condition with in-flight refreshes
+        renderingBounds.west = Number.POSITIVE_INFINITY;
+        renderingBounds.east = Number.NEGATIVE_INFINITY;
+        renderingBounds.south = Number.POSITIVE_INFINITY;
+        renderingBounds.north = Number.NEGATIVE_INFINITY;
+
+        var samplePoints2D = this._samplePoints2D;
+        var samplePoints3D = this._samplePoints3D;
+        var surfaceNormals = this._samplePointsSurfaceNormals;
+        var samplePointsCartographic = this._samplePointsCartographic;
+        var samplePointsLength = samplePointsCartographic.length;
+        var i;
+        var viewProjection = scene.context.uniformState.viewProjection;
+        var scene3D = scene.mode === SceneMode.SCENE3D;
+        var cameraPosition = scene.camera.positionWC;
+        var samplePoint3 = samplePoint3Scratch;
+        for (i = 0; i < samplePointsLength; i++) {
+            var samplePoint = scene3D ? samplePoints3D[i] : samplePoints2D[i];
+            var surfaceNormal = scene3D ? surfaceNormals : Cartesian3.UNIT_X;
+            samplePoint3.x = scene3D ? samplePoint.x : samplePoint.z;
+            samplePoint3.y = scene3D ? samplePoint.y : samplePoint.x;
+            samplePoint3.z = scene3D ? samplePoint.z : samplePoint.y;
+
+            if (pointVisible(samplePoint3, viewProjection, cameraPosition, surfaceNormal)) {
+                var cartographic = samplePointsCartographic[i];
+                renderingBounds.west = Math.min(renderingBounds.west, cartographic.longitude);
+                renderingBounds.east = Math.max(renderingBounds.east, cartographic.longitude);
+                renderingBounds.south = Math.min(renderingBounds.south, cartographic.latitude);
+                renderingBounds.north = Math.max(renderingBounds.north, cartographic.latitude);
+            }
         }
 
         var imageryBounds = this._rectangle;
@@ -341,6 +426,32 @@ define([
                 console.log(e); // TODO: handle or throw?
             });
     };
+
+    var samplePointVec4Scratch = new Cartesian4();
+    var cameraDirectionScratch = new Cartesian3();
+    var maxCosineAngle = CesiumMath.toRadians(80);
+    function pointVisible(samplePoint3, viewProjection, cameraPosition, surfaceNormal) {
+        var samplePoint = samplePointVec4Scratch;
+        samplePoint.x = samplePoint3.x;
+        samplePoint.y = samplePoint3.y;
+        samplePoint.z = samplePoint3.z;
+        samplePoint.w = 1.0;
+
+        Matrix4.multiplyByVector(viewProjection, samplePoint, samplePoint);
+        var x = samplePoint.x / samplePoint.w;
+        var y = samplePoint.y / samplePoint.w;
+        var z = samplePoint.z / samplePoint.w;
+
+        if (x < -1.0 || 1.0 < x || y < -1.0 || 1.0 < y || z < -1.0 || 1.0 < z) {
+            return false;
+        }
+
+        var cameraDirection = Cartesian3.subtract(cameraPosition, samplePoint3, cameraDirectionScratch);
+        Cartesian3.normalize(cameraDirection, cameraDirection);
+        var cameraAngle = Math.acos(Cartesian3.dot(cameraDirection, surfaceNormal));
+
+        return cameraAngle < maxCosineAngle; // TODO: do we need the acos here? something tells me no...
+    }
 
     function requestProjection(taskProcessors, width, height, rectangle) {
         var concurrency = taskProcessors.length;
