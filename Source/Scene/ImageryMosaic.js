@@ -1,6 +1,7 @@
 define([
         '../Core/Bitmap',
         '../Core/Check',
+        '../Core/Color',
         '../Core/Credit',
         '../Core/defaultValue',
         '../Core/defined',
@@ -17,6 +18,7 @@ define([
     ], function(
         Bitmap,
         Check,
+        Color,
         Credit,
         defaultValue,
         defined,
@@ -110,6 +112,11 @@ define([
         this._scene = scene;
 
         this._waitedFrames = 0;
+
+        this._entityCollection = viewer.entities;
+
+        this._boundsRectangle;
+        this._debugShowBoundsRectangle = false;
 
         var that = this;
 
@@ -205,6 +212,24 @@ define([
                     this.refresh(this._scene);
                 }
             }
+        },
+        debugShowBoundsRectangle : {
+            get: function() {
+                return this._debugShowBoundsRectangle;
+            },
+            set: function(value) {
+                if (value) {
+                    this._debugShowBoundsRectangle = true;
+                    if (defined(this._boundsRectangle)) {
+                        this._boundsRectangle.show = true;
+                    }
+                } else {
+                    this._debugShowBoundsRectangle = false;
+                    if (defined(this._boundsRectangle)) {
+                        this._boundsRectangle.show = false;
+                    }
+                }
+            }
         }
     });
 
@@ -271,6 +296,23 @@ define([
         var that = this;
         this._iteration++;
         var iteration = this._iteration;
+
+        if (defined(this._boundsRectangle)) {
+            this._entityCollection.remove(this._boundsRectangle);
+        }
+        this._boundsRectangle = this._entityCollection.add({
+            name : 'cutout',
+            rectangle : {
+                coordinates : renderingBounds,
+                material : Color.WHITE.withAlpha(0.0),
+                height : 10.0,
+                outline : true,
+                outlineWidth : 4.0,
+                outlineColor : Color.WHITE
+            },
+            show : this._debugShowBoundsRectangle
+        });
+
         requestProjection(this._taskProcessors, 1024, 1024, renderingBounds)
             .then(function(reprojectedBitmap) {
                 if (that._iteration !== iteration) {
