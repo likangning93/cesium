@@ -125,7 +125,7 @@ define([
 
         this._entityCollection = viewer.entities;
 
-        this._boundsRectangle;
+        this._boundsRectangle = undefined;
         this._debugShowBoundsRectangle = false;
 
         var longitudeSamplingResolution = 20;
