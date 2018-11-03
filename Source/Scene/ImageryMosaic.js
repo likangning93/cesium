@@ -1,4 +1,5 @@
 define([
+        '../Core/Cartesian2',
         '../Core/Cartesian3',
         '../Core/Cartesian4',
         '../Core/Cartographic',
@@ -13,7 +14,10 @@ define([
         '../Core/FeatureDetection',
         '../Core/getAbsoluteUri',
         '../Core/Matrix4',
+        '../Core/IntersectionTests',
+        '../Core/Plane',
         '../Core/Rectangle',
+        '../Core/Ray',
         '../Core/TaskProcessor',
         '../Core/SerializedMapProjection',
         '../ThirdParty/when',
@@ -21,6 +25,7 @@ define([
         './ImageryLayer',
         './SceneMode'
     ], function(
+        Cartesian2,
         Cartesian3,
         Cartesian4,
         Cartographic,
@@ -35,7 +40,10 @@ define([
         FeatureDetection,
         getAbsoluteUri,
         Matrix4,
+        IntersectionTests,
+        Plane,
         Rectangle,
+        Ray,
         TaskProcessor,
         SerializedMapProjection,
         when,
@@ -300,8 +308,15 @@ define([
     };
 
     var samplePoint3Scratch = new Cartesian3();
+    var surfaceNormalScratch = new Cartesian3();
+    var cvPositionScratch = new Cartesian3();
+    var samplePointCartographicScratch = new Cartographic();
+    var autofocusPointScratch = new Cartesian2();
+    var autofocusRayScratch = new Ray();
+    var cvPlane = new Plane(Cartesian3.UNIT_X, 0.0);
+
     ImageryMosaic.prototype.refresh = function(scene) {
-/*
+
         // Compute an approximate geographic rectangle that we're rendering
         var quadtreePrimitive = scene.globe._surface;
         var quadtreeTilesToRender = quadtreePrimitive._tilesToRender;
@@ -316,14 +331,75 @@ define([
         renderingBounds.south = Number.POSITIVE_INFINITY;
         renderingBounds.north = Number.NEGATIVE_INFINITY;
 
+        // Just use quadtree tiles - bad at close views + horizon facing
+        /*
         for (var i = 0; i < quadtreeTilesToRenderLength; i++) {
             var tileRectangle = quadtreeTilesToRender[i].rectangle;
             renderingBounds.west = Math.min(renderingBounds.west, tileRectangle.west);
             renderingBounds.east = Math.max(renderingBounds.east, tileRectangle.east);
             renderingBounds.south = Math.min(renderingBounds.south, tileRectangle.south);
             renderingBounds.north = Math.max(renderingBounds.north, tileRectangle.north);
+        }*/
+
+        // Use computeViewRectangle approximation - bad at horizon facing, possibly inaccurate in CV
+        //scene.camera.computeViewRectangle(undefined, renderingBounds);
+
+        // Use "autofocus points" against plane or ellipsoid - don't use scene picking, too slow
+        var sqrtAfPoints = 10;
+        var camera = scene.camera;
+        var drawingBufferWidth = scene.drawingBufferWidth;
+        var drawingBufferHeight = scene.drawingBufferHeight;
+        var afWidthInterval = drawingBufferWidth / (sqrtAfPoints - 1);
+        var afHeightInterval = drawingBufferHeight / (sqrtAfPoints - 1);
+        var afPoint = autofocusPointScratch;
+
+        var ellipsoid = scene.globe.ellipsoid;
+        var mapProjection = scene.mapProjection;
+        var viewProjection = scene.context.uniformState.viewProjection;
+        var cameraPosition = scene.camera.positionWC;
+
+        for (var y = 0; y < sqrtAfPoints; y++) {
+            for (var x = 0; x < sqrtAfPoints; x++) {
+                afPoint.x = x * afWidthInterval;
+                afPoint.y = y * afHeightInterval;
+
+                var autofocusRay = camera.getPickRay(afPoint, autofocusRayScratch);
+                var intersectionCartographic;
+                var samplePoint3 = samplePoint3Scratch;
+                var surfaceNormal = surfaceNormalScratch;
+                if (scene.mode === SceneMode.SCENE3D) {
+                    var interval = IntersectionTests.rayEllipsoid(autofocusRay, ellipsoid);
+                    if (!defined(interval)) {
+                        continue;
+                    }
+                    Ray.getPoint(autofocusRay, interval.start, samplePoint3);
+                    intersectionCartographic = ellipsoid.cartesianToCartographic(samplePoint3, samplePointCartographicScratch);
+                    ellipsoid.geodeticSurfaceNormal(samplePoint3, surfaceNormal);
+                } else {
+                    IntersectionTests.rayPlane(autofocusRay, cvPlane, samplePoint3);
+                    if (!defined(samplePoint3)) {
+                        continue;
+                    }
+                    var cvPosition = cvPositionScratch;
+                    cvPosition.x = samplePoint3.y;
+                    cvPosition.y = samplePoint3.z;
+                    cvPosition.z = samplePoint3.x;
+
+                    intersectionCartographic = mapProjection.unproject(cvPosition, samplePointCartographicScratch);
+                    surfaceNormal = Cartesian3.UNIT_X;
+                }
+
+                if (pointVisible(samplePoint3, viewProjection, cameraPosition, surfaceNormal)) {
+                    renderingBounds.west = Math.min(renderingBounds.west, intersectionCartographic.longitude);
+                    renderingBounds.east = Math.max(renderingBounds.east, intersectionCartographic.longitude);
+                    renderingBounds.south = Math.min(renderingBounds.south, intersectionCartographic.latitude);
+                    renderingBounds.north = Math.max(renderingBounds.north, intersectionCartographic.latitude);
+                }
+            }
         }
-*/
+
+        // Use pre-sampled points - bad at close views
+        /*
         // Compute an approximate geographic rectangle that we should render using the sample points we precomputed
         var renderingBounds = new Rectangle(); // Create new to avoid race condition with in-flight refreshes
         renderingBounds.west = Number.POSITIVE_INFINITY;
@@ -356,7 +432,7 @@ define([
                 renderingBounds.north = Math.max(renderingBounds.north, cartographic.latitude);
             }
         }
-
+*/
         var imageryBounds = this._rectangle;
         renderingBounds.west = Math.max(renderingBounds.west, imageryBounds.west);
         renderingBounds.east = Math.min(renderingBounds.east, imageryBounds.east);
