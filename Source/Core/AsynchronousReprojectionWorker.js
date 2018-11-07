@@ -31,6 +31,16 @@ define([
             height : 1024
         });
         this._rectangle = undefined;
+
+        this.sampleCount = 0;
+        this.loadTime = 0.0;
+        this.imageBitmapTime = 0.0;
+        this.canvasTime = 0.0;
+        this.projTime = 0.0;
+
+        this.id = 0.0;
+
+        this._context = undefined;
     }
 
     AsynchronousReprojectionWorker.prototype.runTask = function(parameters, transferableObjects) {
@@ -38,7 +48,17 @@ define([
             return this.initialize(parameters);
         }
         if (parameters.reproject) {
-            return this.reproject(parameters);
+            var that = this;
+            return this.reproject(parameters)
+                .then(function(data) {
+                    console.log(that.id + '  samples: ' + that.sampleCount)
+                    console.log(that.id + '    avg load time ' + (that.loadTime / that.sampleCount));
+                    console.log(that.id + '    avg imageBitmapTime ' + (that.imageBitmapTime / that.sampleCount));
+                    console.log(that.id + '    avg canvasTime ' + (that.canvasTime / that.sampleCount));
+                    console.log(that.id + '    avg projTime ' + (that.projTime / that.sampleCount));
+                    console.log(that.id + '  total time: ' + (that.loadTime + that.imageBitmapTime + that.canvasTime + that.projTime));
+                    return data;
+                });
         }
     };
 
@@ -60,6 +80,7 @@ define([
         var unprojectedRectangles = this.unprojectedRectangles;
 
         this.urls = parameters.urls;
+        this.id = parameters.id;
         var that = this;
 
         this.cachedBuffers = new LRUMap(parameters.imageCacheSize);
@@ -100,18 +121,35 @@ define([
             cachedBufferPromise = resource.fetchBlob();
         }
 
+        var that = this;
+        that.sampleCount++;
+        var imageBitmapTime;
+        var loadTime = performance.now();
+
         return cachedBufferPromise
             .then(function(imageBlob) {
                 if (wasCached) {
                     cachedBuffers.set(url, imageBlob);
                 }
+                that.loadTime += (performance.now() - loadTime);
+
+                imageBitmapTime = performance.now();
                 return createImageBitmap(imageBlob);
             })
             .then(function(imageBitmap) {
-                var canvas = new OffscreenCanvas(imageBitmap.width, imageBitmap.height);
-                var context = canvas.getContext('2d');
+                that.imageBitmapTime += (performance.now() - imageBitmapTime);
+
+                var canvasTime = performance.now();
+                var context = that._context;
+                if (!defined(context) || context.canvas.width !== imageBitmap.width || context.canvas.height !== imageBitmap.height) {
+                    var canvas = new OffscreenCanvas(imageBitmap.width, imageBitmap.height);
+                    that._context = context = canvas.getContext('2d');
+                }
                 context.drawImage(imageBitmap, 0, 0);
                 var imagedata = context.getImageData(0, 0, imageBitmap.width, imageBitmap.height);
+
+                that.canvasTime += (performance.now() - canvasTime);
+
                 return new Bitmap(imagedata);
             })
             .otherwise(function(error) {
@@ -197,7 +235,10 @@ define([
                 var sourceRectangle = workerClass.unprojectedRectangles[imageIndex];
                 var sourceProjectedRectangle = workerClass.projectedRectangles[imageIndex];
                 var projection = workerClass.projections[imageIndex];
+
+                var projTime = performance.now();
                 reprojectImage(targetBitmap, requestRectangle, sourceBitmap, sourceRectangle, sourceProjectedRectangle, projection);
+                workerClass.projTime += performance.now() - projTime;
 
                 return projectEach(requestRectangle, intersectImageIndices, workerClass, index + 1);
             });

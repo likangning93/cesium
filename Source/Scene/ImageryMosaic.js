@@ -175,6 +175,7 @@ define([
             projectedRectangleGroups[index].push(projectedRectangles[i]);
         }
 
+        var initializeStart = performance.now();
         var initializationPromises = new Array(concurrency);
         for (i = 0; i < concurrency; i++) {
             initializationPromises[i] = taskProcessors[i].scheduleTask({
@@ -182,12 +183,15 @@ define([
                 urls : urlGroups[i],
                 serializedMapProjections : serializedProjectionGroups[i],
                 projectedRectangles : projectedRectangleGroups[i],
-                imageCacheSize : defaultValue(options.imageCacheSize, 100)
+                imageCacheSize : defaultValue(options.imageCacheSize, 100),
+                id : i
             });
         }
 
         this.readyPromise = when.all(initializationPromises)
             .then(function(rectangles) {
+                var initializeEnd = performance.now();
+                console.log('init: ' + (initializeEnd - initializeStart));
                 // Merge rectangles
                 var thatRectangle = Rectangle.clone(rectangles[0], that._rectangle);
                 for (var i = 1; i < concurrency; i++) {
@@ -540,8 +544,12 @@ define([
                 rectangle : rectangle
             });
         }
+        var requestStart = performance.now();
         return when.all(promises)
             .then(function(bitmaps) {
+                var receivedTime = performance.now();
+                console.log('bitmaps received: ' + (receivedTime - requestStart));
+
                 // alpha over
                 var targetData = bitmaps[0].data;
                 var pixelCount = width * height;
@@ -558,6 +566,7 @@ define([
                         }
                     }
                 }
+                console.log('bitmap merge: ' + (performance.now() - receivedTime));
 
                 return bitmaps[0];
             });
