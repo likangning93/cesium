@@ -5,6 +5,7 @@ define([
         './Rectangle',
         './Resource',
         './SerializedMapProjection',
+        '../ThirdParty/jpegJsDecoder',
         '../ThirdParty/lru',
         '../ThirdParty/when'
     ], function(
@@ -14,6 +15,7 @@ define([
         Rectangle,
         Resource,
         SerializedMapProjection,
+        jpegJsDecoder,
         LRUMap,
         when
     ) {
@@ -118,7 +120,7 @@ define([
             cachedBufferPromise = when.resolve(cachedBuffers.get(url));
         } else {
             var resource = Resource.createIfNeeded(url);
-            cachedBufferPromise = resource.fetchBlob();
+            cachedBufferPromise = resource.fetchArrayBuffer();
         }
 
         var that = this;
@@ -127,13 +129,14 @@ define([
         var loadTime = performance.now();
 
         return cachedBufferPromise
-            .then(function(imageBlob) {
+            .then(function(imageBuffer) {
                 if (wasCached) {
-                    cachedBuffers.set(url, imageBlob);
+                    cachedBuffers.set(url, imageBuffer);
                 }
                 that.loadTime += (performance.now() - loadTime);
 
                 imageBitmapTime = performance.now();
+                /*
                 return createImageBitmap(imageBlob);
             })
             .then(function(imageBitmap) {
@@ -151,6 +154,12 @@ define([
                 that.canvasTime += (performance.now() - canvasTime);
 
                 return new Bitmap(imagedata);
+                */
+
+                var bitmap = new Bitmap(jpegJsDecoder(imageBuffer, true));
+                that.imageBitmapTime += (performance.now() - imageBitmapTime);
+
+                return bitmap;
             })
             .otherwise(function(error) {
                 return error;
