@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no">
+    <meta name="description" content="Use Viewer to start building new applications or easily embed Cesium into existing applications.">
+    <meta name="cesium-sandcastle-labels" content="Beginner, Showcases">
+    <title>Cesium Demo</title>
+    <script type="text/javascript" src="../Sandcastle-header.js"></script>
+    <script type="text/javascript" src="../../../ThirdParty/requirejs-2.1.20/require.js"></script>
+    <script type="text/javascript">
+        if(typeof require === 'function') {
+            require.config({
+                baseUrl : '../../../Source',
+                waitSeconds : 120
+            });
+        }
+    </script>
+</head>
+<body class="sandcastle-loading" data-sandcastle-bucket="bucket-requirejs.html">
+<style>
+    @import url(../templates/bucket.css);
+</style>
+<div id="cesiumContainer" class="fullSize"></div>
+<div id="loadingOverlay"><h1>Loading...</h1></div>
+<div id="toolbar"></div>
+<script id="cesium_sandcastle_script">
+function startup(Cesium) {
+    'use strict';
+//Sandcastle_Begin
+var viewer = new Cesium.Viewer('cesiumContainer', {
+    imageryProvider : Cesium.createTileMapServiceImageryProvider({
+        url : Cesium.buildModuleUrl('Assets/Textures/NaturalEarthII')
+    })
+});
+var scene = viewer.scene;
+scene.logarithmicDepthBuffer = false;
+
+var whiteWhaleRectanglePrimitive;
+
+var rectangleWidth = 0.00001;
+
+function addRectanglePrimitive(cartographic) {
+
+    var rectangle = new Cesium.Rectangle(cartographic.longitude - rectangleWidth, cartographic.latitude - rectangleWidth, cartographic.longitude + rectangleWidth, cartographic.latitude + rectangleWidth);
+
+    var originalAttributes = Cesium.ShadowVolumeAppearance.getPlanarTextureCoordinateAttributes(rectangle, [0, 0, 0, 1, 1, 0], scene.globe.ellipsoid, scene.mapProjection);
+
+    var southWest_HIGH_value = originalAttributes.southWest_HIGH.value;
+    var southWest_LOW_value = originalAttributes.southWest_LOW.value;
+    var eastward = originalAttributes.eastward.value;
+    var northward = originalAttributes.northward.value;
+
+    var attributes = {};
+
+    var glslFunctions = '\n' +
+    'float unpackLowLessThan100k(vec4 sd) {\n' +
+    '    vec4 d = sd;\n' +
+    '    d.x = czm_branchFreeTernary(sd.x < 128.0, d.x, (255.0 - sd.x));\n' +
+    '    return (1000.0 * d.x + 10.0 * d.y + 0.1 * d.z + 0.001 * d.w) * czm_branchFreeTernary(sd.x < 128.0, 1.0, -1.0);\n' +
+    '}\n' +
+    '\n' +
+    'vec3 southwest_LOW(vec4 xPacked, vec4 yPacked, vec4 zPacked) {\n' +
+    '    vec3 value;\n' +
+    '    value.x = unpackLowLessThan100k(xPacked);\n' +
+    '    value.y = unpackLowLessThan100k(yPacked);\n' +
+    '    value.z = unpackLowLessThan100k(zPacked);\n' +
+    '    return value;\n' +
+    '}\n' +
+    '\n' +
+    'float unpackHighMagLessThan100Million(vec4 sd) {\n' +
+    '    vec4 d = sd;\n' +
+    '    d.x = czm_branchFreeTernary(sd.x < 128.0, d.x, (255.0 - sd.x));\n' +
+    '    return (1000000.0 * d.x + 10000.0 * d.y + 100.0 * d.z + d.w) * czm_branchFreeTernary(sd.x < 128.0, 1.0, -1.0);\n' +
+    '}\n' +
+    '\n' +
+    'vec3 southwest_HIGH(vec4 xPacked, vec4 yPacked, vec4 zPacked) {\n' +
+    '    vec3 value;\n' +
+    '    value.x = unpackHighMagLessThan100Million(xPacked);\n' +
+    '    value.y = unpackHighMagLessThan100Million(yPacked);\n' +
+    '    value.z = unpackHighMagLessThan100Million(zPacked);\n' +
+    '    return value;\n' +
+    '}\n' +
+    '\n' +
+    'float unpackPositiveLessThan10k(vec4 sd) {\n' +
+    '    vec4 d = sd;\n' +
+    '    d.x = czm_branchFreeTernary(sd.x < 128.0, d.x, (255.0 - sd.x));\n' +
+    '    return 100.0 * d.x + d.y + 0.01 * d.z + 0.0001 * d.w;\n' +
+    '}\n' +
+    '\n' +
+    'vec3 getExtent(vec4 xPacked, vec4 yPacked, vec4 zPacked) {\n' +
+    '    vec3 value;\n' +
+    '    value.x = unpackPositiveLessThan10k(xPacked);\n' +
+    '    value.y = unpackPositiveLessThan10k(yPacked);\n' +
+    '    value.z = unpackPositiveLessThan10k(zPacked);\n' +
+    '    return value;\n' +
+    '}\n';
+
+    console.log(glslFunctions);
+
+    encodeLowLessThan100k(southWest_LOW_value[0], 'southWest_LOW_0', attributes);
+    encodeLowLessThan100k(southWest_LOW_value[1], 'southWest_LOW_1', attributes);
+    encodeLowLessThan100k(southWest_LOW_value[2], 'southWest_LOW_2', attributes);
+
+    encodeHighMagLessThan100Million(southWest_HIGH_value[0], 'southWest_HIGH_0', attributes);
+    encodeHighMagLessThan100Million(southWest_HIGH_value[1], 'southWest_HIGH_1', attributes);
+    encodeHighMagLessThan100Million(southWest_HIGH_value[2], 'southWest_HIGH_2', attributes);
+
+    encodePositiveLessThan10000(eastward[0], 'eastward0', attributes);
+    encodePositiveLessThan10000(eastward[1], 'eastward1', attributes);
+    encodePositiveLessThan10000(eastward[2], 'eastward2', attributes);
+
+    encodePositiveLessThan10000(northward[0], 'northward0', attributes);
+    encodePositiveLessThan10000(northward[1], 'northward1', attributes);
+    encodePositiveLessThan10000(northward[2], 'northward2', attributes);
+
+    var vertexShaderSource =
+        'attribute vec3 position3DHigh;\n' +
+        'attribute vec3 position3DLow;\n' +
+        'attribute float batchId;\n' +
+
+        'varying vec2 v_inversePlaneExtents;\n' +
+        'varying vec4 v_westPlane;\n' +
+        'varying vec4 v_southPlane;\n' +
+        'varying vec2 v_depth;' +
+
+        glslFunctions +
+
+        'void main()\n' +
+        '{\n' +
+        '    gl_Position = czm_depthClampFarPlane(czm_modelViewProjectionRelativeToEye * czm_computePosition());\n' +
+        '    v_depth = gl_Position.zw;\n' +
+        '    vec3 southwestHigh = southwest_HIGH(czm_batchTable_southWest_HIGH_0(batchId), czm_batchTable_southWest_HIGH_1(batchId), czm_batchTable_southWest_HIGH_2(batchId));\n' +
+        '    vec3 southwestLow = southwest_LOW(czm_batchTable_southWest_LOW_0(batchId), czm_batchTable_southWest_LOW_1(batchId), czm_batchTable_southWest_LOW_2(batchId));\n' +
+        '    vec3 southWestCorner = (czm_modelViewRelativeToEye * czm_translateRelativeToEye(southwestHigh, southwestLow)).xyz;\n' +
+
+        '    vec3 northwardExtent = getExtent(czm_batchTable_northward0(batchId), czm_batchTable_northward1(batchId), czm_batchTable_northward2(batchId));\n' +
+        '    vec3 eastwardExtent = getExtent(czm_batchTable_eastward0(batchId), czm_batchTable_eastward1(batchId), czm_batchTable_eastward2(batchId));\n' +
+        '    vec3 northWestCorner = czm_normal * northwardExtent + southWestCorner;\n' +
+        '    vec3 southEastCorner = czm_normal * eastwardExtent + southWestCorner;\n' +
+
+        '    vec3 eastWard = southEastCorner - southWestCorner;\n' +
+        '    float eastExtent = length(eastWard);\n' +
+        '    eastWard /= eastExtent;\n' +
+
+        '    vec3 northWard = northWestCorner - southWestCorner;\n' +
+        '    float northExtent = length(northWard);\n' +
+        '    northWard /= northExtent;\n' +
+
+        '    v_westPlane = vec4(eastWard, -dot(eastWard, southWestCorner));\n' +
+        '    v_southPlane = vec4(northWard, -dot(northWard, southWestCorner));\n' +
+        '    v_inversePlaneExtents = vec2(1.0 / eastExtent, 1.0 / northExtent);\n' +
+        '}\n';
+
+    var fragmentShaderSource =
+        'varying vec2 v_inversePlaneExtents;\n' +
+        'varying vec4 v_westPlane;\n' +
+        'varying vec4 v_southPlane;\n' +
+        'varying vec2 v_depth;' +
+
+        'void main()\n' +
+        '{\n' +
+        '    float logDepthOrDepth = mix(czm_depthRange.near, czm_depthRange.far, 0.5 * v_depth.x / v_depth.y + 0.5);' +
+        '    vec4 eyeCoordinate = czm_windowToEyeCoordinates(gl_FragCoord.xy, logDepthOrDepth);\n' +
+        '    float u = czm_planeDistance(v_westPlane,  eyeCoordinate.xyz / eyeCoordinate.w) * v_inversePlaneExtents.x;\n' +
+        '    float v = czm_planeDistance(v_southPlane, eyeCoordinate.xyz / eyeCoordinate.w) * v_inversePlaneExtents.y;\n' +
+
+        '    vec4 color = vec4(u, v, 0.0, 1.0);\n' +
+        '    if (0.0 <= u && u <= 1.0 && 0.0 <= v && v <= 1.0) {\n' +
+        '        gl_FragColor = color;\n' +
+        '    } else { \n' +
+        '        gl_FragColor = vec4(0.0, 0.0, 1.0, 1.0);\n' +
+        '    }\n' +
+        '}';
+
+    whiteWhaleRectanglePrimitive = new Cesium.Primitive({
+        geometryInstances : new Cesium.GeometryInstance({
+            geometry : new Cesium.RectangleGeometry({
+                rectangle : rectangle
+            }),
+            attributes : attributes
+        }),
+        appearance : new Cesium.MaterialAppearance({
+            vertexShaderSource : vertexShaderSource,
+            fragmentShaderSource : fragmentShaderSource,
+        })
+    });
+    scene.primitives.add(whiteWhaleRectanglePrimitive);
+}
+
+var ComponentDatatype = Cesium.ComponentDatatype;
+var GeometryInstanceAttribute = Cesium.GeometryInstanceAttribute;
+
+function encodeLowLessThan100k(value, valueName, attributes) {
+    // southWest_LOW_value: [47948.52424639207, -57253.208066388965, -63.35439327189351]
+    // encode a value, say, 12,345.678 to 4 uint8 values: 12 34 56 78
+    var fract = Math.abs(value);
+    var d12 = Math.floor(fract / 1000);
+    fract -= d12 * 1000; // 345.678
+    var d34 = Math.floor(fract / 10);
+    fract -= d34 * 10; // 5.678
+    var d56 = Math.floor(fract * 10);
+    fract -= d56 * 0.1; // 0.078
+    var d78 = Math.floor(fract * 1000);
+
+    if (value < 0) {
+        d12 = 255 - d12;
+    }
+
+    console.log(valueName + ' enc100K :' + value + ' ' + d12 + ' ' + d34 + ' ' + d56 + ' ' + d78);
+
+    attributes[valueName] = new GeometryInstanceAttribute({
+        componentDatatype: ComponentDatatype.UNSIGNED_BYTE,
+        componentsPerAttribute: 4,
+        normalize: false,
+        value : [d12, d34, d56, d78]
+    });
+}
+
+function encodeHighMagLessThan100Million(value, valueName, attributes) {
+    // southWest_HIGH_value: [1048576, -6225920, -0]
+    // encode a value, say, -12,345,678 to 4 uint8 values: sign+12 34 56 78
+    var fract = Math.abs(value);
+    var d12 = Math.floor(fract / 1000000);
+    fract -= d12 * 1000000; // 345678
+    var d34 = Math.floor(fract / 10000);
+    fract -= d34 * 10000; // 5678
+    var d56 = Math.floor(fract / 100);
+    fract -= d56 * 100; // 78
+    var d78 = Math.floor(fract);
+
+    if (value < 0) {
+        d12 = 255 - d12;
+    }
+
+    console.log(valueName + ' enc100M: ' + value + ' ' + d12 + ' ' + d34 + ' ' + d56 + ' ' + d78);
+
+    attributes[valueName] = new GeometryInstanceAttribute({
+        componentDatatype: ComponentDatatype.UNSIGNED_BYTE,
+        componentsPerAttribute: 4,
+        normalize: false,
+        value : [d12, d34, d56, d78]
+    });
+}
+
+function encodePositiveLessThan10000(value, valueName, attributes) {
+    // eastward: [125.66324484278448, 21.931747117079794, 0]
+    // encode a value, say, 1234.5678 to 4 uint8 values
+    var fract = Math.abs(value);
+    var d12 = Math.floor(fract / 100);
+    fract -= d12 * 100; // 34.5678
+    var d34 = Math.floor(fract);
+    fract -= d34; // 0.5678
+    var d56 = Math.floor(fract * 100);
+    fract -= d56 * 0.01; // 0.0078
+    var d78 = Math.floor(fract * 10000);
+
+    console.log(valueName + ' enc1000: ' + value + ' ' + d12 + ' ' + d34 + ' ' + d56 + ' ' + d78);
+
+    attributes[valueName] = new GeometryInstanceAttribute({
+        componentDatatype: ComponentDatatype.UNSIGNED_BYTE,
+        componentsPerAttribute: 4,
+        normalize: false,
+        value : [d12, d34, d56, d78]
+    });
+}
+
+var handler = new Cesium.ScreenSpaceEventHandler(scene.canvas);
+handler.setInputAction(function(movement) {
+    scene.primitives.remove(whiteWhaleRectanglePrimitive);
+    if (scene.mode !== Cesium.SceneMode.MORPHING) {
+        if (scene.pickPositionSupported) {
+            var cartesian = viewer.camera.pickEllipsoid(movement.position);
+
+            if (Cesium.defined(cartesian)) {
+                var cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+                addRectanglePrimitive(cartographic);
+            }
+        }
+    }
+}, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+var initialLongitude = -80.1;
+var initialLatitude = 0.0;
+
+addRectanglePrimitive(Cesium.Cartographic.fromDegrees(initialLongitude, initialLatitude));
+viewer.camera.lookAt(Cesium.Cartesian3.fromDegrees(initialLongitude, initialLatitude), new Cesium.Cartesian3(100.0, 100.0, 100.0));
+viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);//Sandcastle_End
+    Sandcastle.finishedLoading();
+}
+if (typeof Cesium !== 'undefined') {
+    startup(Cesium);
+} else if (typeof require === 'function') {
+    require(['Cesium'], startup);
+}
+</script>
+</body>
+</html>

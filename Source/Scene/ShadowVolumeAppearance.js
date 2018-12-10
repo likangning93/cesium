@@ -559,6 +559,80 @@ define([
         Cartesian3.subtract(northWestCorner, southWestCorner, northVectorResult);
     }
 
+    function encodeLowLessThan100k(value, valueName, attributes) {
+        // southWest_LOW_value: [47948.52424639207, -57253.208066388965, -63.35439327189351]
+        // encode a value, say, 12,345.678 to 4 uint8 values: 12 34 56 78
+        var fract = Math.abs(value);
+        var d12 = Math.floor(fract / 1000);
+        fract -= d12 * 1000; // 345.678
+        var d34 = Math.floor(fract / 10);
+        fract -= d34 * 10; // 5.678
+        var d56 = Math.floor(fract * 10);
+        fract -= d56 * 0.1; // 0.078
+        var d78 = Math.floor(fract * 1000);
+
+        if (value < 0) {
+            d12 = 255 - d12;
+        }
+
+        console.log(valueName + ' enc100K :' + value + ' ' + d12 + ' ' + d34 + ' ' + d56 + ' ' + d78);
+
+        attributes[valueName] = new GeometryInstanceAttribute({
+            componentDatatype: ComponentDatatype.UNSIGNED_BYTE,
+            componentsPerAttribute: 4,
+            normalize: false,
+            value : [d12, d34, d56, d78]
+        });
+    }
+
+    function encodeHighMagLessThan100Million(value, valueName, attributes) {
+        // southWest_HIGH_value: [1048576, -6225920, -0]
+        // encode a value, say, -12,345,678 to 4 uint8 values: sign+12 34 56 78
+        var fract = Math.abs(value);
+        var d12 = Math.floor(fract / 1000000);
+        fract -= d12 * 1000000; // 345678
+        var d34 = Math.floor(fract / 10000);
+        fract -= d34 * 10000; // 5678
+        var d56 = Math.floor(fract / 100);
+        fract -= d56 * 100; // 78
+        var d78 = Math.floor(fract);
+
+        if (value < 0) {
+            d12 = 255 - d12;
+        }
+
+        console.log(valueName + ' enc100M: ' + value + ' ' + d12 + ' ' + d34 + ' ' + d56 + ' ' + d78);
+
+        attributes[valueName] = new GeometryInstanceAttribute({
+            componentDatatype: ComponentDatatype.UNSIGNED_BYTE,
+            componentsPerAttribute: 4,
+            normalize: false,
+            value : [d12, d34, d56, d78]
+        });
+    }
+
+    function encodePositiveLessThan10000(value, valueName, attributes) {
+        // eastward: [125.66324484278448, 21.931747117079794, 0]
+        // encode a value, say, 1234.5678 to 4 uint8 values
+        var fract = Math.abs(value);
+        var d12 = Math.floor(fract / 100);
+        fract -= d12 * 100; // 34.5678
+        var d34 = Math.floor(fract);
+        fract -= d34; // 0.5678
+        var d56 = Math.floor(fract * 100);
+        fract -= d56 * 0.01; // 0.0078
+        var d78 = Math.floor(fract * 10000);
+
+        console.log(valueName + ' enc1000: ' + value + ' ' + d12 + ' ' + d34 + ' ' + d56 + ' ' + d78);
+
+        attributes[valueName] = new GeometryInstanceAttribute({
+            componentDatatype: ComponentDatatype.UNSIGNED_BYTE,
+            componentsPerAttribute: 4,
+            normalize: false,
+            value : [d12, d34, d56, d78]
+        });
+    }
+
     var eastwardScratch = new Cartesian3();
     var northwardScratch = new Cartesian3();
     var encodeScratch = new EncodedCartesian3();

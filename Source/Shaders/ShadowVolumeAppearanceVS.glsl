@@ -25,6 +25,54 @@ varying vec3 v_uMaxAndInverseDistance;
 varying vec3 v_vMaxAndInverseDistance;
 #endif // TEXTURE_COORDINATES
 
+#ifdef TEXTURE_COORDINATES
+#ifndef SPHERICAL
+// Code for unpacking floating point values, naively packed to very specific ranges.
+float unpackLowLessThan100k(vec4 sd) {
+    vec4 d = sd;
+    d.x = czm_branchFreeTernary(sd.x < 128.0, d.x, (255.0 - sd.x));
+    return (1000.0 * d.x + 10.0 * d.y + 0.1 * d.z + 0.001 * d.w) * czm_branchFreeTernary(sd.x < 128.0, 1.0, -1.0);
+}
+
+vec3 unpackLOW(vec4 xPacked, vec4 yPacked, vec4 zPacked) {
+    vec3 value;
+    value.x = unpackLowLessThan100k(xPacked);
+    value.y = unpackLowLessThan100k(yPacked);
+    value.z = unpackLowLessThan100k(zPacked);
+    return value;
+}
+
+float unpackHighMagLessThan100Million(vec4 sd) {
+    vec4 d = sd;
+    d.x = czm_branchFreeTernary(sd.x < 128.0, d.x, (255.0 - sd.x));
+    return (1000000.0 * d.x + 10000.0 * d.y + 100.0 * d.z + d.w) * czm_branchFreeTernary(sd.x < 128.0, 1.0, -1.0);
+}
+
+vec3 unpackHIGH(vec4 xPacked, vec4 yPacked, vec4 zPacked) {
+    vec3 value;
+    value.x = unpackHighMagLessThan100Million(xPacked);
+    value.y = unpackHighMagLessThan100Million(yPacked);
+    value.z = unpackHighMagLessThan100Million(zPacked);
+    return value;
+}
+
+float unpackPositiveLessThan10k(vec4 sd) {
+    vec4 d = sd;
+    d.x = czm_branchFreeTernary(sd.x < 128.0, d.x, (255.0 - sd.x));
+    return 100.0 * d.x + d.y + 0.01 * d.z + 0.0001 * d.w;
+}
+
+vec3 getExtent(vec4 xPacked, vec4 yPacked, vec4 zPacked) {
+    vec3 value;
+    value.x = unpackPositiveLessThan10k(xPacked);
+    value.y = unpackPositiveLessThan10k(yPacked);
+    value.z = unpackPositiveLessThan10k(zPacked);
+    return value;
+}
+
+#endif
+#endif
+
 void main()
 {
     vec4 position = czm_computePosition();
