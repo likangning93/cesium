@@ -67,11 +67,6 @@ function addRectanglePrimitive(cartographic) {
     var eastward = attributes.eastward.value;
     var northward = attributes.northward.value;
 
-    deflate(southWest_HIGH);
-    deflate(southWest_LOW);
-    deflate(eastward);
-    deflate(northward);
-
     var vertexShaderSource =
         'attribute vec3 position3DHigh;' +
         'attribute vec3 position3DLow;' +
@@ -83,12 +78,11 @@ function addRectanglePrimitive(cartographic) {
         'varying vec2 v_depth;' +
 
         'float inflate(float f) {' +
-        '    if (f == 0.0) {return f;}' +
-        '    return sign(f) * pow(2.0, abs(f));' +
+        '    return f;' +
         '}' +
 
         'vec3 inflate(vec3 v) {' +
-        '    return vec3(inflate(v.x), inflate(v.y), inflate(v.z));' +
+        '    return v;' +
         '}' +
 
 

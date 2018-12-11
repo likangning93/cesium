@@ -38,7 +38,7 @@ var scene = viewer.scene;
 
 var whiteWhaleRectanglePrimitive;
 
-var rectangleWidth = 0.00001;
+var rectangleWidth = 0.001;
 
 function addRectanglePrimitive(cartographic) {
 
@@ -73,15 +73,23 @@ function addRectanglePrimitive(cartographic) {
     '    d.x = czm_branchFreeTernary(sd.x < 128.0, d.x, (255.0 - sd.x));\n' +
     '    return (1000000.0 * d.x + 10000.0 * d.y + 100.0 * d.z + d.w) * czm_branchFreeTernary(sd.x < 128.0, 1.0, -1.0);\n' +
     '}\n' +
+    'float unpackHighMagLessThan100Million2(vec4 sd) {\n' +
+    '    vec4 d = sd;\n' +
+    '    d.x = czm_branchFreeTernary(sd.x < 128.0, d.x, (255.0 - sd.x));\n' +
+    // iOS needs floor(sd.x) to replace this with d.x
+    // Seems to be off by somewhere in the 0.01 range, which is terrible!
+    '    return (1000000.0 * 6.0 + 10000.0 * d.y + 100.0 * d.z + d.w) * czm_branchFreeTernary(sd.x < 128.0, 1.0, -1.0);\n' +
+    '}\n' +
     '\n' +
     'vec3 southwest_HIGH(vec4 xPacked, vec4 yPacked, vec4 zPacked) {\n' +
     '    vec3 value;\n' +
     '    value.x = unpackHighMagLessThan100Million(xPacked);\n' +
-    '    value.y = unpackHighMagLessThan100Million(yPacked);\n' +
+    '    value.y = unpackHighMagLessThan100Million2(yPacked);\n' +
     '    value.z = unpackHighMagLessThan100Million(zPacked);\n' +
     '    return value;\n' +
     '}\n' +
     '\n' +
+    // TODO: this needs to be signed
     'float unpackPositiveLessThan10k(vec4 sd) {\n' +
     '    vec4 d = sd;\n' +
     '    d.x = czm_branchFreeTernary(sd.x < 128.0, d.x, (255.0 - sd.x));\n' +
@@ -95,8 +103,6 @@ function addRectanglePrimitive(cartographic) {
     '    value.z = unpackPositiveLessThan10k(zPacked);\n' +
     '    return value;\n' +
     '}\n';
-
-    console.log(glslFunctions);
 
     encodeLowLessThan100k(southWest_LOW_value[0], 'southWest_LOW_0', attributes);
     encodeLowLessThan100k(southWest_LOW_value[1], 'southWest_LOW_1', attributes);
@@ -123,6 +129,11 @@ function addRectanglePrimitive(cartographic) {
         'varying vec4 v_westPlane;\n' +
         'varying vec4 v_southPlane;\n' +
 
+        'varying vec3 v_southWest_HIGH_value;\n' +
+        'varying vec3 v_southWest_LOW_value;\n' +
+        'varying vec3 v_eastward;\n' +
+        'varying vec3 v_northward;\n' +
+
         glslFunctions +
 
         'void main()\n' +
@@ -130,10 +141,17 @@ function addRectanglePrimitive(cartographic) {
         '    gl_Position = czm_depthClampFarPlane(czm_modelViewProjectionRelativeToEye * czm_computePosition());\n' +
         '    vec3 southwestHigh = southwest_HIGH(czm_batchTable_southWest_HIGH_0(batchId), czm_batchTable_southWest_HIGH_1(batchId), czm_batchTable_southWest_HIGH_2(batchId));\n' +
         '    vec3 southwestLow = southwest_LOW(czm_batchTable_southWest_LOW_0(batchId), czm_batchTable_southWest_LOW_1(batchId), czm_batchTable_southWest_LOW_2(batchId));\n' +
+        '    v_southWest_HIGH_value = southwestHigh;\n' +
+        '    v_southWest_LOW_value = southwestLow;\n' +
+
         '    vec3 southWestCorner = (czm_modelViewRelativeToEye * czm_translateRelativeToEye(southwestHigh, southwestLow)).xyz;\n' +
 
         '    vec3 northwardExtent = getExtent(czm_batchTable_northward0(batchId), czm_batchTable_northward1(batchId), czm_batchTable_northward2(batchId));\n' +
         '    vec3 eastwardExtent = getExtent(czm_batchTable_eastward0(batchId), czm_batchTable_eastward1(batchId), czm_batchTable_eastward2(batchId));\n' +
+
+        '    vec3 v_eastward = eastwardExtent;\n' +
+        '    vec3 v_northward = northwardExtent;\n' +
+
         '    vec3 northWestCorner = czm_normal * northwardExtent + southWestCorner;\n' +
         '    vec3 southEastCorner = czm_normal * eastwardExtent + southWestCorner;\n' +
 
@@ -154,6 +172,12 @@ function addRectanglePrimitive(cartographic) {
         'varying vec2 v_inversePlaneExtents;\n' +
         'varying vec4 v_westPlane;\n' +
         'varying vec4 v_southPlane;\n' +
+
+        'varying vec3 v_southWest_HIGH_value;\n' +
+        'varying vec3 v_southWest_LOW_value;\n' +
+        'varying vec3 v_eastward;\n' +
+        'varying vec3 v_northward;\n' +
+
         'void main()\n' +
         '{\n' +
         '    float logDepthOrDepth = czm_unpackDepth(texture2D(czm_globeDepthTexture, gl_FragCoord.xy / czm_viewport.zw));\n' +
@@ -165,8 +189,19 @@ function addRectanglePrimitive(cartographic) {
         '    if (0.0 <= u && u <= 1.0 && 0.0 <= v && v <= 1.0) {\n' +
         '        gl_FragColor = color;\n' +
         '    } else { \n' +
-        '        gl_FragColor = vec4(0.0, 0.0, 1.0, 1.0);\n' +
+        '        gl_FragColor = vec4(u, v, 1.0, 1.0);\n' +
         '    }\n' +
+
+        //'    vec3 southWest_HIGH_actual = vec3(' + southWest_HIGH_value[0] + ', ' + southWest_HIGH_value[1] + ', ' + southWest_HIGH_value[2] + ');\n' +
+        //'    vec3 southWest_LOW_actual = vec3(' + southWest_LOW_value[0] + ', ' + southWest_LOW_value[1] + ', ' + southWest_LOW_value[2] + ');\n' +
+        //'    vec3 eastward_actual = vec3(' + eastward[0] + ', ' + eastward[1] + ', ' + eastward[2] + ');\n' +
+        //'    vec3 northward_actual = vec3(' + northward[0] + ', ' + northward[1] + ', ' + northward[2] + ');\n' +
+
+        //'    gl_FragColor = vec4(abs(southWest_HIGH_actual - v_southWest_HIGH_value), 1.0);\n' +
+        //'    gl_FragColor = vec4(abs(southWest_LOW_actual - v_southWest_LOW_value), 1.0);\n' +
+        //'    gl_FragColor = vec4(abs(eastward_actual - v_eastward), 1.0);\n' +
+        //'    gl_FragColor = vec4(abs(northward_actual - v_northward), 1.0);\n' +
+
         '}';
 
     whiteWhaleRectanglePrimitive = new Cesium.Primitive({
@@ -280,7 +315,7 @@ var initialLongitude = -80.1;
 var initialLatitude = 0.0;
 
 addRectanglePrimitive(Cesium.Cartographic.fromDegrees(initialLongitude, initialLatitude));
-viewer.camera.lookAt(Cesium.Cartesian3.fromDegrees(initialLongitude, initialLatitude), new Cesium.Cartesian3(100.0, 100.0, 100.0));
+viewer.camera.lookAt(Cesium.Cartesian3.fromDegrees(initialLongitude, initialLatitude), new Cesium.Cartesian3(10000.0, 10000.0, 10000.0));
 viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);//Sandcastle_End
     Sandcastle.finishedLoading();
 }
