@@ -37,6 +37,8 @@ var viewer = new Cesium.Viewer('cesiumContainer', {
 var scene = viewer.scene;
 scene.logarithmicDepthBuffer = false;
 
+// working everywhere and even on the iPad Pro! yayyyyyyyyyyyyyyyy!
+
 var whiteWhaleRectanglePrimitive;
 
 var rectangleWidth = 0.00001;
@@ -55,9 +57,17 @@ function addRectanglePrimitive(cartographic) {
     var attributes = {};
 
     var glslFunctions = '\n' +
-    'float unpackLowLessThan100k(vec4 sd) {\n' +
+    'vec4 clampAndMagnitude(vec4 sd) {\n' +
     '    vec4 d = sd;\n' +
     '    d.x = czm_branchFreeTernary(sd.x < 128.0, d.x, (255.0 - sd.x));\n' +
+    '    d.x = floor(0.5 + d.x);\n' +
+    '    d.y = floor(0.5 + d.y);\n' +
+    '    d.z = floor(0.5 + d.z);\n' +
+    '    return d;\n' +
+    '}\n' +
+
+    'float unpackLowLessThan100k(vec4 sd) {\n' +
+    '    vec4 d = clampAndMagnitude(sd);\n' +
     '    return (1000.0 * d.x + 10.0 * d.y + 0.1 * d.z + 0.001 * d.w) * czm_branchFreeTernary(sd.x < 128.0, 1.0, -1.0);\n' +
     '}\n' +
     '\n' +
@@ -69,12 +79,11 @@ function addRectanglePrimitive(cartographic) {
     '    return value;\n' +
     '}\n' +
     '\n' +
+
     'float unpackHighMagLessThan100Million(vec4 sd) {\n' +
-    '    vec4 d = sd;\n' +
-    '    d.x = czm_branchFreeTernary(sd.x < 128.0, d.x, (255.0 - sd.x));\n' +
+    '    vec4 d = clampAndMagnitude(sd);\n' +
     '    return (1000000.0 * d.x + 10000.0 * d.y + 100.0 * d.z + d.w) * czm_branchFreeTernary(sd.x < 128.0, 1.0, -1.0);\n' +
     '}\n' +
-    '\n' +
     'vec3 southwest_HIGH(vec4 xPacked, vec4 yPacked, vec4 zPacked) {\n' +
     '    vec3 value;\n' +
     '    value.x = unpackHighMagLessThan100Million(xPacked);\n' +
@@ -83,21 +92,19 @@ function addRectanglePrimitive(cartographic) {
     '    return value;\n' +
     '}\n' +
     '\n' +
-    'float unpackPositiveLessThan10k(vec4 sd) {\n' +
-    '    vec4 d = sd;\n' +
-    '    d.x = czm_branchFreeTernary(sd.x < 128.0, d.x, (255.0 - sd.x));\n' +
-    '    return 100.0 * d.x + d.y + 0.01 * d.z + 0.0001 * d.w;\n' +
+
+    'float unpackMagLessThan10k(vec4 sd) {\n' +
+    '    vec4 d = clampAndMagnitude(sd);\n' +
+    '    return (100.0 * d.x + d.y + 0.01 * d.z + 0.0001 * d.w) * czm_branchFreeTernary(sd.x < 128.0, 1.0, -1.0);\n' +
     '}\n' +
     '\n' +
     'vec3 getExtent(vec4 xPacked, vec4 yPacked, vec4 zPacked) {\n' +
     '    vec3 value;\n' +
-    '    value.x = unpackPositiveLessThan10k(xPacked);\n' +
-    '    value.y = unpackPositiveLessThan10k(yPacked);\n' +
-    '    value.z = unpackPositiveLessThan10k(zPacked);\n' +
+    '    value.x = unpackMagLessThan10k(xPacked);\n' +
+    '    value.y = unpackMagLessThan10k(yPacked);\n' +
+    '    value.z = unpackMagLessThan10k(zPacked);\n' +
     '    return value;\n' +
     '}\n';
-
-    console.log(glslFunctions);
 
     encodeLowLessThan100k(southWest_LOW_value[0], 'southWest_LOW_0', attributes);
     encodeLowLessThan100k(southWest_LOW_value[1], 'southWest_LOW_1', attributes);
@@ -107,13 +114,13 @@ function addRectanglePrimitive(cartographic) {
     encodeHighMagLessThan100Million(southWest_HIGH_value[1], 'southWest_HIGH_1', attributes);
     encodeHighMagLessThan100Million(southWest_HIGH_value[2], 'southWest_HIGH_2', attributes);
 
-    encodePositiveLessThan10000(eastward[0], 'eastward0', attributes);
-    encodePositiveLessThan10000(eastward[1], 'eastward1', attributes);
-    encodePositiveLessThan10000(eastward[2], 'eastward2', attributes);
+    encodeMagLessThan10000(eastward[0], 'eastward0', attributes);
+    encodeMagLessThan10000(eastward[1], 'eastward1', attributes);
+    encodeMagLessThan10000(eastward[2], 'eastward2', attributes);
 
-    encodePositiveLessThan10000(northward[0], 'northward0', attributes);
-    encodePositiveLessThan10000(northward[1], 'northward1', attributes);
-    encodePositiveLessThan10000(northward[2], 'northward2', attributes);
+    encodeMagLessThan10000(northward[0], 'northward0', attributes);
+    encodeMagLessThan10000(northward[1], 'northward1', attributes);
+    encodeMagLessThan10000(northward[2], 'northward2', attributes);
 
     var vertexShaderSource =
         'attribute vec3 position3DHigh;\n' +
@@ -137,6 +144,7 @@ function addRectanglePrimitive(cartographic) {
 
         '    vec3 northwardExtent = getExtent(czm_batchTable_northward0(batchId), czm_batchTable_northward1(batchId), czm_batchTable_northward2(batchId));\n' +
         '    vec3 eastwardExtent = getExtent(czm_batchTable_eastward0(batchId), czm_batchTable_eastward1(batchId), czm_batchTable_eastward2(batchId));\n' +
+
         '    vec3 northWestCorner = czm_normal * northwardExtent + southWestCorner;\n' +
         '    vec3 southEastCorner = czm_normal * eastwardExtent + southWestCorner;\n' +
 
@@ -170,7 +178,7 @@ function addRectanglePrimitive(cartographic) {
         '    if (0.0 <= u && u <= 1.0 && 0.0 <= v && v <= 1.0) {\n' +
         '        gl_FragColor = color;\n' +
         '    } else { \n' +
-        '        gl_FragColor = vec4(0.0, 0.0, 1.0, 1.0);\n' +
+        '        gl_FragColor = vec4(u, v, 1.0, 1.0);\n' +
         '    }\n' +
         '}';
 
@@ -244,9 +252,9 @@ function encodeHighMagLessThan100Million(value, valueName, attributes) {
     });
 }
 
-function encodePositiveLessThan10000(value, valueName, attributes) {
+function encodeMagLessThan10000(value, valueName, attributes) {
     // eastward: [125.66324484278448, 21.931747117079794, 0]
-    // encode a value, say, 1234.5678 to 4 uint8 values
+    // encode a value, say, -1234.5678 to 4 uint8 values sign+12 34 56 78
     var fract = Math.abs(value);
     var d12 = Math.floor(fract / 100);
     fract -= d12 * 100; // 34.5678
@@ -255,6 +263,10 @@ function encodePositiveLessThan10000(value, valueName, attributes) {
     var d56 = Math.floor(fract * 100);
     fract -= d56 * 0.01; // 0.0078
     var d78 = Math.floor(fract * 10000);
+
+    if (value < 0) {
+        d12 = 255 - d12;
+    }
 
     console.log(valueName + ' enc1000: ' + value + ' ' + d12 + ' ' + d34 + ' ' + d56 + ' ' + d78);
 
