@@ -36,6 +36,8 @@ var viewer = new Cesium.Viewer('cesiumContainer', {
 });
 var scene = viewer.scene;
 
+// working everywhere and even on the iPad Pro! yayyyyyyyyyyyyyyyy!
+
 var whiteWhaleRectanglePrimitive;
 
 var rectangleWidth = 0.00001;
@@ -248,7 +250,7 @@ function encodeHighMagLessThan100Million(value, valueName, attributes) {
 
 function encodeMagLessThan10000(value, valueName, attributes) {
     // eastward: [125.66324484278448, 21.931747117079794, 0]
-    // encode a value, say, 1234.5678 to 4 uint8 values
+    // encode a value, say, -1234.5678 to 4 uint8 values sign+12 34 56 78
     var fract = Math.abs(value);
     var d12 = Math.floor(fract / 100);
     fract -= d12 * 100; // 34.5678
