@@ -40,7 +40,7 @@ var scene = viewer.scene;
 
 var whiteWhaleRectanglePrimitive;
 
-var rectangleWidth = 0.00001;
+var rectangleWidth = Cesium.Math.toRadians(0.5);
 
 function addRectanglePrimitive(cartographic) {
 
@@ -92,16 +92,16 @@ function addRectanglePrimitive(cartographic) {
     '}\n' +
     '\n' +
 
-    'float unpackMagLessThan10k(vec4 sd) {\n' +
+    'float encodeLowLessThan1000k(vec4 sd) {\n' +
     '    vec4 d = clampAndMagnitude(sd);\n' +
-    '    return (100.0 * d.x + d.y + 0.01 * d.z + 0.0001 * d.w) * czm_branchFreeTernary(sd.x < 128.0, 1.0, -1.0);\n' +
+    '    return (10000.0 * d.x + 100.0 * d.y + d.z + 0.01 * d.w) * czm_branchFreeTernary(sd.x < 128.0, 1.0, -1.0);\n' +
     '}\n' +
     '\n' +
     'vec3 getExtent(vec4 xPacked, vec4 yPacked, vec4 zPacked) {\n' +
     '    vec3 value;\n' +
-    '    value.x = unpackMagLessThan10k(xPacked);\n' +
-    '    value.y = unpackMagLessThan10k(yPacked);\n' +
-    '    value.z = unpackMagLessThan10k(zPacked);\n' +
+    '    value.x = encodeLowLessThan1000k(xPacked);\n' +
+    '    value.y = encodeLowLessThan1000k(yPacked);\n' +
+    '    value.z = encodeLowLessThan1000k(zPacked);\n' +
     '    return value;\n' +
     '}\n';
 
@@ -113,13 +113,13 @@ function addRectanglePrimitive(cartographic) {
     encodeHighMagLessThan100Million(southWest_HIGH_value[1], 'southWest_HIGH_1', attributes);
     encodeHighMagLessThan100Million(southWest_HIGH_value[2], 'southWest_HIGH_2', attributes);
 
-    encodeMagLessThan10000(eastward[0], 'eastward0', attributes);
-    encodeMagLessThan10000(eastward[1], 'eastward1', attributes);
-    encodeMagLessThan10000(eastward[2], 'eastward2', attributes);
+    encodeLowLessThan1000k(eastward[0], 'eastward0', attributes);
+    encodeLowLessThan1000k(eastward[1], 'eastward1', attributes);
+    encodeLowLessThan1000k(eastward[2], 'eastward2', attributes);
 
-    encodeMagLessThan10000(northward[0], 'northward0', attributes);
-    encodeMagLessThan10000(northward[1], 'northward1', attributes);
-    encodeMagLessThan10000(northward[2], 'northward2', attributes);
+    encodeLowLessThan1000k(northward[0], 'northward0', attributes);
+    encodeLowLessThan1000k(northward[1], 'northward1', attributes);
+    encodeLowLessThan1000k(northward[2], 'northward2', attributes);
 
     var vertexShaderSource =
         'attribute vec3 position3DHigh;\n' +
@@ -248,17 +248,17 @@ function encodeHighMagLessThan100Million(value, valueName, attributes) {
     });
 }
 
-function encodeMagLessThan10000(value, valueName, attributes) {
-    // eastward: [125.66324484278448, 21.931747117079794, 0]
-    // encode a value, say, -1234.5678 to 4 uint8 values sign+12 34 56 78
+function encodeLowLessThan1000k(value, valueName, attributes) {
+    // eastward: [111318.07788798447, 110572.90055949285, 0]
+    // encode a value, say, -123456.78 to 4 uint8 values sign+12 34 56 78
     var fract = Math.abs(value);
-    var d12 = Math.floor(fract / 100);
-    fract -= d12 * 100; // 34.5678
-    var d34 = Math.floor(fract);
-    fract -= d34; // 0.5678
-    var d56 = Math.floor(fract * 100);
-    fract -= d56 * 0.01; // 0.0078
-    var d78 = Math.floor(fract * 10000);
+    var d12 = Math.floor(fract / 10000);
+    fract -= d12 * 10000; // 3456.78
+    var d34 = Math.floor(fract / 100);
+    fract -= d34 * 100; // 56.78
+    var d56 = Math.floor(fract);
+    fract -= d56; // 0.78
+    var d78 = Math.floor(fract / 0.001);
 
     if (value < 0) {
         d12 = 255 - d12;
@@ -293,7 +293,7 @@ var initialLongitude = 0.0;
 var initialLatitude = 0.0;
 
 addRectanglePrimitive(Cesium.Cartographic.fromDegrees(initialLongitude, initialLatitude));
-viewer.camera.lookAt(Cesium.Cartesian3.fromDegrees(initialLongitude, initialLatitude), new Cesium.Cartesian3(100.0, 100.0, 100.0));
+viewer.camera.lookAt(Cesium.Cartesian3.fromDegrees(initialLongitude, initialLatitude), new Cesium.Cartesian3(0.0, 0.0, 200000.0));
 viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);//Sandcastle_End
     Sandcastle.finishedLoading();
 }
