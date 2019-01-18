@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no">
+    <meta name="description" content="Use Viewer to start building new applications or easily embed Cesium into existing applications.">
+    <meta name="cesium-sandcastle-labels" content="Beginner, Showcases">
+    <title>Cesium Demo</title>
+    <script type="text/javascript" src="../Sandcastle-header.js"></script>
+    <script type="text/javascript" src="../../../ThirdParty/requirejs-2.1.20/require.js"></script>
+    <script type="text/javascript">
+        if(typeof require === 'function') {
+            require.config({
+                baseUrl : '../../../Source',
+                waitSeconds : 120
+            });
+        }
+    </script>
+</head>
+<body class="sandcastle-loading" data-sandcastle-bucket="bucket-requirejs.html">
+<style>
+    @import url(../templates/bucket.css);
+</style>
+<div id="cesiumContainer" class="fullSize"></div>
+<div id="loadingOverlay"><h1>Loading...</h1></div>
+<div id="toolbar">
+    <table><tbody>
+        <tr>
+            <td>FOV</td>
+            <td>
+                <input type="range" min="0.0001" max="3.1415" step="0.01" data-bind="value: fov, valueUpdate: 'input'">
+                <input type="text" size="5" data-bind="value: fov">
+            </td>
+        </tr>
+    </tbody></table>
+</div>
+<script id="cesium_sandcastle_script">
+function startup(Cesium) {
+    'use strict';
+//Sandcastle_Begin
+var viewer = new Cesium.Viewer('cesiumContainer', {
+    terrainProvider: Cesium.createWorldTerrain()
+});
+
+var scene = viewer.scene;
+var camera = viewer.camera;
+
+scene.logarithmicDepthBuffer = false;
+
+var fov = camera.frustum.fov = Cesium.Math.PI_OVER_TWO;
+var viewModel = {
+    fov : fov
+};
+
+Cesium.knockout.track(viewModel);
+
+var toolbar = document.getElementById('toolbar');
+Cesium.knockout.applyBindings(viewModel, toolbar);
+
+Cesium.knockout.getObservable(viewModel, 'fov').subscribe(
+    function(newValue) {
+        fov = parseFloat(viewModel.fov);
+        camera.frustum.fov = fov;
+    }
+);
+
+viewer.entities.add({
+    polygon : {
+        hierarchy : [new Cesium.Cartesian3(-1947636.5869502602, -4783373.446912863,3734821.5080648637), new Cesium.Cartesian3(-1947651.3687303485, -4783251.989580622,3734678.422665136), new Cesium.Cartesian3(-1947770.6496589922, -4783079.418155834,3734837.23166574), new Cesium.Cartesian3(-1947755.8678789039, -4783200.875488075,3734980.3170654667)],
+        perPositionHeight : true,
+        material : '../images/0.jpg',
+        stRotation : 0.0
+    }
+});
+
+Sandcastle.addToolbarButton('0.jpg', function() {
+    viewer.camera.flyTo({
+        destination : new Cesium.Cartesian3(-1947905.9319548868, -4783315.741320991, 3734774.4610409257),
+        orientation : {
+            direction : new Cesium.Cartesian3(0.8878714695623671, 0.3919395628492468, 0.24097226523130041),
+            up : new Cesium.Cartesian3(0.07851569857008057, -0.6451393019309685, 0.7600201090642766),
+        },
+        duration : 1.0
+    });
+});
+
+viewer.entities.add({
+    polygon : {
+        hierarchy : [new Cesium.Cartesian3(-1947479.4175051656, -4779440.715213715,3738804.7809043564), new Cesium.Cartesian3(-1947413.4492501796, -4779098.79239348,3738585.70394469), new Cesium.Cartesian3(-1946976.2633652845, -4778758.937898199,3739247.7744684345), new Cesium.Cartesian3(-1947042.2316202705, -4779100.860718434,3739466.851428101)],
+        perPositionHeight : true,
+        material : '../images/1.jpg',
+        stRotation : Cesium.Math.PI_OVER_TWO
+    }
+});
+
+Sandcastle.addToolbarButton('1.jpg', function() {
+    viewer.camera.flyTo({
+        destination : new Cesium.Cartesian3(-1947861.0965588936, -4778806.275127323, 3739293.7505005794),
+        orientation : {
+            direction : new Cesium.Cartesian3(0.8471872044850143, -0.3927210569333136, -0.3578323797506976),
+            up : new Cesium.Cartesian3(-0.16034695881242086, -0.8311010255604077, 0.5325034630047455),
+        },
+        duration : 1.0
+    });
+});
+
+viewer.entities.add({
+    polygon : {
+        hierarchy : [new Cesium.Cartesian3(-1945719.5483197013, -4796695.82635321,3741632.682984664), new Cesium.Cartesian3(-1949048.560511682, -4793670.127574689,3742937.1292829546), new Cesium.Cartesian3(-1944955.6965299556, -4791359.085604826,3748021.7979570525), new Cesium.Cartesian3(-1941626.6843379752, -4794384.784383346,3746717.3516587624)],
+        perPositionHeight : true,
+        material : '../images/2.jpg',
+        stRotation : Cesium.Math.PI
+    }
+});
+
+Sandcastle.addToolbarButton('2.jpg', function() {
+    viewer.camera.flyTo({
+        destination : new Cesium.Cartesian3(-1947624.7792326354, -4798144.2944318885, 3748539.421023177),
+        orientation : {
+            direction : new Cesium.Cartesian3(0.3814061859027998, 0.6865238303417002, -0.6190430935953002),
+            up : new Cesium.Cartesian3(0.7107377653163502, -0.6459809289813483, -0.27849680132007776),
+        },
+        duration : 1.0
+    });
+});
+
+viewer.entities.add({
+    polygon : {
+        hierarchy : [new Cesium.Cartesian3(-1945129.4196164524, -4795665.878341797,3750577.6618895475), new Cesium.Cartesian3(-1945530.3769887832, -4795037.753044136,3750925.767463776), new Cesium.Cartesian3(-1944583.3106493608, -4794841.590169818,3751662.6656522816), new Cesium.Cartesian3(-1944182.3532770297, -4795469.71546748,3751314.5600780533)],
+        perPositionHeight : true,
+        material : '../images/3.jpg',
+        stRotation : Cesium.Math.PI
+    }
+});
+
+Sandcastle.addToolbarButton('3.jpg', function() {
+    viewer.camera.flyTo({
+        destination : new Cesium.Cartesian3(-1945271.8309478352, -4795911.969715631, 3751829.3459298983),
+        orientation : {
+            direction : new Cesium.Cartesian3(0.39455156593665514, 0.6251003622830085, -0.6734824414122353),
+            up : new Cesium.Cartesian3(0.487493573111726, -0.7636897756453427, -0.4232350915856676),
+        },
+        duration : 1.0
+    });
+});
+
+viewer.entities.add({
+    polygon : {
+        hierarchy : [new Cesium.Cartesian3(-1945317.1251758912, -4797489.335712014,3731520.776968027), new Cesium.Cartesian3(-1952458.3881715757, -4791681.559980157,3732010.226301111), new Cesium.Cartesian3(-1946744.0985706626, -4785561.279439376,3742761.1410966604), new Cesium.Cartesian3(-1939602.835574978, -4791369.055171233,3742271.691763576)],
+        perPositionHeight : true,
+        material : '../images/4.jpg',
+        stRotation : Cesium.Math.PI_OVER_TWO
+    }
+});
+
+Sandcastle.addToolbarButton('4.jpg', function() {
+    viewer.camera.flyTo({
+        destination : new Cesium.Cartesian3(-1951615.4101083889, -4799001.223460572, 3744365.261193585),
+        orientation : {
+            direction : new Cesium.Cartesian3(0.4732372945699424, 0.6334843370972657, -0.6121634239976769),
+            up : new Cesium.Cartesian3(0.7747270462959313, -0.6300623490563573, -0.053098399591392086),
+        },
+        duration : 1.0
+    });
+});//Sandcastle_End
+    Sandcastle.finishedLoading();
+}
+if (typeof Cesium !== 'undefined') {
+    startup(Cesium);
+} else if (typeof require === 'function') {
+    require(['Cesium'], startup);
+}
+</script>
+</body>
+</html>

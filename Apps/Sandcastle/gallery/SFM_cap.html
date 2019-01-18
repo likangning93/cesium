@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no">
+    <meta name="description" content="Use Viewer to start building new applications or easily embed Cesium into existing applications.">
+    <meta name="cesium-sandcastle-labels" content="Beginner, Showcases">
+    <title>Cesium Demo</title>
+    <script type="text/javascript" src="../Sandcastle-header.js"></script>
+    <script type="text/javascript" src="../../../ThirdParty/requirejs-2.1.20/require.js"></script>
+    <script type="text/javascript">
+    require.config({
+        baseUrl : '../../../Source',
+        waitSeconds : 60
+    });
+    </script>
+</head>
+<body class="sandcastle-loading" data-sandcastle-bucket="bucket-requirejs.html">
+<style>
+    @import url(../templates/bucket.css);
+</style>
+<div id="cesiumContainer" class="fullSize"></div>
+<div id="loadingOverlay"><h1>Loading...</h1></div>
+<div id="toolbar">
+    <table><tbody>
+        <tr>
+            <td>FOV</td>
+            <td>
+                <input type="range" min="0.0001" max="3.1415" step="0.01" data-bind="value: fov, valueUpdate: 'input'">
+                <input type="text" size="5" data-bind="value: fov">
+            </td>
+        </tr>
+    </tbody></table>
+</div>
+<script id="cesium_sandcastle_script">
+function startup(Cesium) {
+    'use strict';
+//Sandcastle_Begin
+var viewer = new Cesium.Viewer('cesiumContainer', {
+    //imageryProvider : Cesium.createTileMapServiceImageryProvider({
+    //    url : Cesium.buildModuleUrl('Assets/Textures/NaturalEarthII')
+    //})
+    terrainProvider: Cesium.createWorldTerrain()
+});
+
+var scene = viewer.scene;
+var camera = viewer.camera;
+
+scene.logarithmicDepthBuffer = false;
+
+var fov = Cesium.Math.PI_OVER_THREE;
+var viewModel = {
+    fov : fov
+};
+
+Cesium.knockout.track(viewModel);
+
+var toolbar = document.getElementById('toolbar');
+Cesium.knockout.applyBindings(viewModel, toolbar);
+
+Cesium.knockout.getObservable(viewModel, 'fov').subscribe(
+    function(newValue) {
+        fov = parseFloat(viewModel.fov);
+        camera.frustum.fov = fov;
+    }
+);
+
+// Add polygon code
+var Matrix4 = Cesium.Matrix4;
+var Cartesian3 = Cesium.Cartesian3;
+var Cartesian4 = Cesium.Cartesian4;
+var topRightScreenSpace =    new Cartesian3(1.0, 1.0, -1.0);
+var topLeftScreenSpace =     new Cartesian3(1.0, -1.0, -1.0);
+var bottomRightScreenSpace = new Cartesian3(-1.0, 1.0, -1.0);
+var bottomLeftScreenSpace =  new Cartesian3(-1.0, -1.0, -1.0);
+
+var worldSpaceResult = new Cartesian4();
+function getWorldSpaceMaybe(ndc, matrix) {
+    var ndc4 = new Cartesian4(ndc.x, ndc.y, ndc.z, 1.0);
+    Matrix4.multiplyByVector(matrix, ndc4, worldSpaceResult);
+    var result = new Cartesian3(worldSpaceResult.x, worldSpaceResult.y, worldSpaceResult.z);
+    Cartesian3.divideByScalar(result, worldSpaceResult.w, result);
+    return result;
+}
+
+function computePositions() {
+    var inverseModelViewMatrix = scene.context.uniformState.inverseModelViewProjection;
+    var positions = [
+        getWorldSpaceMaybe(topRightScreenSpace, inverseModelViewMatrix),
+        getWorldSpaceMaybe(topLeftScreenSpace, inverseModelViewMatrix),
+        getWorldSpaceMaybe(bottomLeftScreenSpace, inverseModelViewMatrix),
+        getWorldSpaceMaybe(bottomRightScreenSpace, inverseModelViewMatrix)
+    ];
+    return positions;
+}
+
+Sandcastle.addToolbarButton('add poly', function() {
+    viewer.entities.add({
+        polygon : {
+            hierarchy : computePositions(),
+            perPositionHeight : true,
+            material : '../images/Cesium_Logo_Color.jpg',
+            stRotation : 0.0
+        }
+    });
+
+    viewer.entities.add({
+        position : camera.position,
+        point : {
+            pixelSize : 10,
+            color : Cesium.Color.YELLOW
+        }
+    });
+});
+
+// download view code
+var filename = 'download.jpg';
+function downloadBlob(blob) {
+    var link = document.createElement("a");
+    link.download = filename;
+    link.href = window.URL.createObjectURL(blob);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+var recording = false;
+viewer.scene.postRender.addEventListener(function(scene) {
+    if (!recording) {
+        return;
+    }
+    recording = false;
+    viewer.canvas.toBlob(downloadBlob, "image/jpeg");
+});
+
+var images = 0;
+Sandcastle.addToolbarButton('download view', function() {
+    recording = true;
+
+    filename = images + '.jpg';
+    images++;
+
+    // Log info on how to make a polygon with this image
+    var p = computePositions();
+    var positionsString = '[new Cesium.Cartesian3(' + p[0].x + ', ' + p[0].y + ',' + p[0].z + ')';
+    positionsString += ', new Cesium.Cartesian3(' + p[1].x + ', ' + p[1].y + ',' + p[1].z + ')';
+    positionsString += ', new Cesium.Cartesian3(' + p[2].x + ', ' + p[2].y + ',' + p[2].z + ')';
+    positionsString += ', new Cesium.Cartesian3(' + p[3].x + ', ' + p[3].y + ',' + p[3].z + ')]';
+
+    console.log('\n\
+viewer.entities.add({\n\
+    polygon : {\n\
+        hierarchy : ' + positionsString + ',\n\
+        perPositionHeight : true,\n\
+        material : \'../images/' + filename + '\',\n\
+        stRotation : 0.0\n\
+    }\n\
+});\n\
+    ');
+
+    // Log how to go to the view for this image
+    var position = camera.position;
+    var direction = camera.direction;
+    var up = camera.up;
+    console.log('\n\
+Sandcastle.addToolbarButton(\'' + filename + '\', function() {\n\
+    viewer.camera.flyTo({\n\
+        destination : new Cesium.Cartesian3(' + position.x + ', ' + position.y + ', ' + position.z + '),\n\
+        orientation : {\n\
+            direction : new Cesium.Cartesian3(' + direction.x + ', ' + direction.y + ', ' + direction.z + '),\n\
+            up : new Cesium.Cartesian3(' + up.x + ', ' + up.y + ', ' + up.z + '),\n\
+        },\n\
+        duration : 1.0\n\
+    });\n\
+});\n\
+    ');
+});
+
+var tileset = new Cesium.Cesium3DTileset({
+    url: '../../SampleData/Cesium3DTiles/Tilesets/Tileset/tileset.json'
+});
+viewer.scene.primitives.add(tileset);
+viewer.zoomTo(tileset);
+
+viewer.extend(Cesium.viewerCesium3DTilesInspectorMixin);
+
+//Sandcastle_End
+    Sandcastle.finishedLoading();
+}
+if (typeof Cesium !== 'undefined') {
+    startup(Cesium);
+} else if (typeof require === 'function') {
+    require(['Cesium'], startup);
+}
+</script>
+</body>
+</html>
