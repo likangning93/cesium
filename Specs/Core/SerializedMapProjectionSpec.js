@@ -4,16 +4,16 @@ defineSuite([
         'Core/Ellipsoid',
         'Core/GeographicProjection',
         'Core/Proj4Projection',
-        'Core/WebMercatorProjection',
-        'ThirdParty/when'
+        'Core/Rectangle',
+        'Core/WebMercatorProjection'
     ], function(
         SerializedMapProjection,
         CustomProjection,
         Ellipsoid,
         GeographicProjection,
         Proj4Projection,
-        WebMercatorProjection,
-        when) {
+        Rectangle,
+        WebMercatorProjection) {
     'use strict';
 
     it('serializes and de-serializes WebMercatorProjection', function() {
@@ -51,15 +51,23 @@ defineSuite([
     });
 
     it('serializes and de-serializes Proj4Projection', function() {
-        var projection = new Proj4Projection('+proj=moll +lon_0=0 +x_0=0 +y_0=0 +a=6371000 +b=6371000 +units=m +no_defs', 0.5);
+        var wkt = '+proj=moll +lon_0=0 +x_0=0 +y_0=0 +a=6371000 +b=6371000 +units=m +no_defs';
+        var bounds = Rectangle.fromDegrees(-180, -90, 0, 90);
+        var projection = new Proj4Projection({
+            wellKnownText : wkt,
+            heightScale : 0.5,
+            ellipsoid : Ellipsoid.UNIT_SPHERE,
+            wgs84Bounds : bounds
+        });
         var serialized = new SerializedMapProjection(projection);
 
         return SerializedMapProjection.deserialize(serialized)
             .then(function(deserializedProjection) {
                 expect(deserializedProjection instanceof Proj4Projection).toBe(true);
-                expect(projection.ellipsoid.equals(deserializedProjection.ellipsoid)).toBe(true);
-                expect(deserializedProjection.wellKnownText).toEqual(serialized.wellKnownText);
-                expect(deserializedProjection.heightScale).toEqual(serialized.heightScale);
+                expect(Ellipsoid.UNIT_SPHERE.equals(deserializedProjection.ellipsoid)).toBe(true);
+                expect(deserializedProjection.wellKnownText).toEqual(wkt);
+                expect(deserializedProjection.heightScale).toEqual(0.5);
+                expect(bounds.equals(deserializedProjection.wgs84Bounds)).toBe(true);
             });
     });
 

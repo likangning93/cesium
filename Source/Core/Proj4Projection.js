@@ -24,45 +24,65 @@ define([
         proj4) {
     'use strict';
 
-    // proj4 may crash with absolute extents
-    var smallerThanMax = Rectangle.fromDegrees(-180.0 + CesiumMath.EPSILON7, -90.0 + CesiumMath.EPSILON7, 180 - CesiumMath.EPSILON7, 90 - CesiumMath.EPSILON7);
-
     /**
-     * MapProjection using proj4js. This projection is only to be used with Ellipsoid.WGS84.
-     * Users should exercise caution when using local-area projections, as local area projections
-     * may produce unexpected results outside their valid boundaries in Cartographic space (wgs84Bounds).
-     * These boundaries may be looked up at spatialreference.org.
+     * MapProjection using PROJ.4 style well-known-text.
+     * Users should use the <code>options.wgs84Bounds</code> parameter when using local-area projections,
+     * as local area projections may produce unexpected results outside their valid boundaries
+     * in Cartographic space. These unexpected results may cause computation errors elsewhere in Cesium.
+     *
+     * {@link Globe.cartographicLimitRectangle} may also be useful for reducing
+     * visual artifacts due to clamping of coordinates to the <code>options.wgs84Bounds</code>.
      *
      * Scenes using Proj4Projection will default to <code>MapMode2D.ROTATE</code> instead of <code>MapMode2D.INFINITE_SCROLL</code>.
      *
      * @alias Proj4Projection
      * @constructor
      *
-     * @param {String} [wellKnownText] proj4js well known text specifying the projection. Defaults to EPSG:3857, web mercator.
-     * @param {Number} [heightScale=1.0] Scale to convert from heights in meters to the projection's units.
-     * @param {Rectangle} [wgs84Bounds] Cartographic bounds over which the projection is valid. Cartographic points will be clamped to these bounds prior to projection.
+     * @param {Object} options Object with the following properties:
+     * @param {String} options.wellKnownText proj4-style well known text specifying the projection. Defaults to well-known-text for EPSG:3857, web mercator.
+     * @param {Number} [options.heightScale=1.0] Scale to convert from heights in meters to the projection's units.
+     * @param {Rectangle} [options.wgs84Bounds] Cartographic bounds over which the projection is valid. Cartographic points will be clamped to these bounds prior to projection.
+     * @param {Ellipsoid} [options.ellipsoid=Ellipsoid.WGS84] The ellipsoid.
      *
      * @see MapProjection
      * @demo {@link https://cesiumjs.org/Cesium/Apps/Sandcastle/index.html?src=Map%20Projections.html|Map Projections Demo}
      */
-    function Proj4Projection(wellKnownText, heightScale, wgs84Bounds) {
-        this.ellipsoid = Ellipsoid.WGS84;
+    function Proj4Projection(options) {
+        options = defaultValue(options, defaultValue.EMPTY_OBJECT);
 
-        var wkt = defaultValue(wellKnownText, 'EPSG:3857'); // web mercator
+        //>>includeStart('debug', pragmas.debug);
+        Check.typeOf.string('options.wellKnownText', options.wellKnownText);
+        //>>includeEnd('debug');
 
+        var wkt = options.wellKnownText;
+        var heightScale = defaultValue(options.heightScale, 1.0);
+        var wgs84Bounds = defaultValue(options.wgs84Bounds, Rectangle.MAX_VALUE);
+
+        this._ellipsoid = defaultValue(options.ellipsoid, Ellipsoid.WGS84);
         this._projection = proj4(wkt);
         this._wkt = wkt;
 
-        heightScale = defaultValue(heightScale, 1.0);
         this._heightScale = heightScale;
         this._inverseHeightScale = 1.0 / heightScale;
-
-        wgs84Bounds = defaultValue(wgs84Bounds, smallerThanMax);
 
         this._wgs84Bounds = Rectangle.clone(wgs84Bounds);
     }
 
     defineProperties(Proj4Projection.prototype, {
+        /**
+         * Gets the {@link Ellipsoid}.
+         *
+         * @memberof Proj4Projection.prototype
+         *
+         * @type {Ellipsoid}
+         * @readonly
+         */
+        ellipsoid : {
+            get : function() {
+                return this._ellipsoid;
+            }
+        },
+
         /**
          * The well-known-text string used to initialize proj4js.
          * @memberof Proj4Projection.prototype

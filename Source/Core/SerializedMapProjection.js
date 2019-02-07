@@ -91,7 +91,12 @@ define([
             projection = new WebMercatorProjection(ellipsoid);
         } else if (projectionType === ProjectionType.PROJ4JS) {
             var wgs84Bounds = Rectangle.unpack(serializedMapProjection.packedRectangle);
-            projection = new Proj4Projection(serializedMapProjection.wellKnownText, serializedMapProjection.heightScale, wgs84Bounds);
+            projection = new Proj4Projection({
+                wellKnownText : serializedMapProjection.wellKnownText,
+                heightScale : serializedMapProjection.heightScale,
+                wgs84Bounds : wgs84Bounds,
+                ellipsoid : ellipsoid
+            });
         } else if (projectionType === ProjectionType.CUSTOM) {
             projection = new CustomProjection(serializedMapProjection.url, ellipsoid);
             return projection.readyPromise;
