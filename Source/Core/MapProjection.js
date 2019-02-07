@@ -2,6 +2,7 @@ define([
         './Cartographic',
         './Cartesian3',
         './Check',
+        './defaultValue',
         './defineProperties',
         './DeveloperError',
         './Rectangle'
@@ -9,6 +10,7 @@ define([
         Cartographic,
         Cartesian3,
         Check,
+        defaultValue,
         defineProperties,
         DeveloperError,
         Rectangle) {
@@ -87,30 +89,30 @@ define([
      */
     MapProjection.prototype.unproject = DeveloperError.throwInstantiationError;
 
-    var maxcoordRectangleScratch = new Rectangle();
-    var rectangleCenterScratch = new Cartographic();
+    //var maxcoordRectangleScratch = new Rectangle();
+    //var rectangleCenterScratch = new Cartographic();
     /**
      * Approximates the X/Y extents of a map projection in 2D.
      *
      * @function
      *
      * @param {MapProjection} mapProjection A map projection from cartographic coordinates to 2D space.
-     * @param {Cartesian2} result result parameter.
+     * @param {Rectangle} [result] optional result parameter.
      * @private
      */
     MapProjection.approximateMaximumCoordinate = function(mapProjection, result) {
         //>>includeStart('debug', pragmas.debug);
         Check.defined('mapProjection', mapProjection);
-        Check.defined('result', result);
         //>>includeEnd('debug');
 
-        var projectedExtents = Rectangle.approximateProjectedExtents(Rectangle.MAX_VALUE, mapProjection, maxcoordRectangleScratch);
-        var projectedCenter = Rectangle.center(projectedExtents, rectangleCenterScratch);
+        var maxRectangle = defaultValue(mapProjection.wgs84Bounds, Rectangle.MAX_VALUE);
+        var projectedExtents = Rectangle.approximateProjectedExtents(maxRectangle, mapProjection, result);
+        //var projectedCenter = Rectangle.center(projectedExtents, rectangleCenterScratch);
 
-        result.x = projectedCenter.longitude + projectedExtents.width * 0.5;
-        result.y = projectedCenter.latitude + projectedExtents.height * 0.5;
+        //result.x = projectedCenter.longitude + projectedExtents.width * 0.5;
+        //result.y = projectedCenter.latitude + projectedExtents.height * 0.5;
 
-        return result;
+        return projectedExtents;
     };
 
     return MapProjection;

@@ -35,6 +35,7 @@ define([
         '../Core/PerspectiveOffCenterFrustum',
         '../Core/PixelFormat',
         '../Core/Ray',
+        '../Core/Rectangle',
         '../Core/RequestScheduler',
         '../Core/SerializedMapProjection',
         '../Core/ShowGeometryInstanceAttribute',
@@ -121,6 +122,7 @@ define([
         PerspectiveOffCenterFrustum,
         PixelFormat,
         Ray,
+        Rectangle,
         RequestScheduler,
         SerializedMapProjection,
         ShowGeometryInstanceAttribute,
@@ -2651,7 +2653,7 @@ define([
         Camera.clone(savedCamera, camera);
     }
 
-    var scratch2DViewportMaxCoord = new Cartesian2();
+    var scratch2DViewportMaxCoord = new Rectangle();
     var scratch2DViewportSavedPosition = new Cartesian3();
     var scratch2DViewportTransform = new Matrix4();
     var scratch2DViewportCameraTransform = new Matrix4();
@@ -2670,7 +2672,7 @@ define([
 
         var maxCoord = scratch2DViewportMaxCoord;
 
-        Cartesian2.clone(scene._maxCoord2D, maxCoord);
+        Rectangle.clone(scene._maxCoord2D, maxCoord);
 
         var position = Cartesian3.clone(camera.position, scratch2DViewportSavedPosition);
         var transform = Matrix4.clone(camera.transform, scratch2DViewportCameraTransform);
@@ -2682,7 +2684,7 @@ define([
         var projectionMatrix = camera.frustum.projectionMatrix;
 
         var x = camera.positionWC.y;
-        var eyePoint = Cartesian3.fromElements(CesiumMath.sign(x) * maxCoord.x - x, 0.0, -camera.positionWC.x, scratch2DViewportEyePoint);
+        var eyePoint = Cartesian3.fromElements(CesiumMath.sign(x) * maxCoord.east - x, 0.0, -camera.positionWC.x, scratch2DViewportEyePoint);
         var windowCoordinates = Transforms.pointToGLWindowCoordinates(projectionMatrix, viewportTransformation, eyePoint, scratch2DViewportWindowCoords);
 
         windowCoordinates.x = Math.floor(windowCoordinates.x);
@@ -2719,7 +2721,7 @@ define([
             viewport.width = windowCoordinates.x - viewportX;
 
             var right = camera.frustum.right;
-            camera.frustum.right = maxCoord.x - x;
+            camera.frustum.right = maxCoord.east - x;
 
             frameState.cullingVolume = camera.frustum.computeCullingVolume(camera.positionWC, camera.directionWC, camera.upWC);
             context.uniformState.update(frameState);
@@ -2743,7 +2745,7 @@ define([
             viewport.width = viewportX + viewportWidth - windowCoordinates.x;
 
             var left = camera.frustum.left;
-            camera.frustum.left = -maxCoord.x - x;
+            camera.frustum.left = maxCoord.west - x;
 
             frameState.cullingVolume = camera.frustum.computeCullingVolume(camera.positionWC, camera.directionWC, camera.upWC);
             context.uniformState.update(frameState);

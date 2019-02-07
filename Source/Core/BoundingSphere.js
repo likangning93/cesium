@@ -269,7 +269,7 @@ define([
 
         projection = defaultValue(projection, defaultProjection);
 
-        if (!projection.isNormalCylindrical) {
+        if (!projection.isNormalCylindrical && false) {
             var southwest = Rectangle.southwest(rectangle, cornerScratch);
             var widthStep = rectangle.width / (INTERVAL_COUNT - 1);
             var heightStep = rectangle.height / (INTERVAL_COUNT - 1);

@@ -20,6 +20,7 @@ define([
         '../Core/Plane',
         '../Core/Quaternion',
         '../Core/Ray',
+        '../Core/Rectangle',
         '../Core/Transforms',
         './CameraEventAggregator',
         './CameraEventType',
@@ -49,6 +50,7 @@ define([
         Plane,
         Quaternion,
         Ray,
+        Rectangle,
         Transforms,
         CameraEventAggregator,
         CameraEventType,
@@ -300,7 +302,7 @@ define([
         this._rotatingZoom = false;
 
         var projection = scene.mapProjection;
-        this._maxCoord = MapProjection.approximateMaximumCoordinate(projection, new Cartesian2());
+        this._maxCoord = MapProjection.approximateMaximumCoordinate(projection, new Rectangle());
 
         // Constants, Make any of these public?
         this._zoomFactor = 5.0;
@@ -548,7 +550,7 @@ define([
                 var worldPosition = object._zoomWorldPosition;
                 var endPosition = camera.position;
 
-                if (!Cartesian3.equals(worldPosition, endPosition) && camera.positionCartographic.height < object._maxCoord.x * 2.0) {
+                if (!Cartesian3.equals(worldPosition, endPosition) && camera.positionCartographic.height < object._maxCoord.width) {
                     var savedX = camera.position.x;
 
                     var direction = Cartesian3.subtract(worldPosition, endPosition, scratchZoomDirection);
@@ -972,7 +974,8 @@ define([
         var scene = controller._scene;
         var camera = scene.camera;
         var maxCoord = controller._maxCoord;
-        var onMap = Math.abs(camera.position.x) - maxCoord.x < 0 && Math.abs(camera.position.y) - maxCoord.y < 0;
+        var onMap = maxCoord.west <= camera.position.x && camera.position.x <= maxCoord.east &&
+            maxCoord.south <= camera.position.y && camera.position.y <= maxCoord.north;
 
         if (controller._tiltCVOffMap || !onMap || camera.position.z > controller._minimumPickingTerrainHeight) {
             controller._tiltCVOffMap = true;

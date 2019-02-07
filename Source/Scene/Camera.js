@@ -224,7 +224,7 @@ define([
         this._modeChanged = true;
         var projection = scene.mapProjection;
         this._projection = projection;
-        this._maxCoord = MapProjection.approximateMaximumCoordinate(projection, new Cartesian2());
+        this._maxCoord = MapProjection.approximateMaximumCoordinate(projection, new Rectangle());
         this._max2Dfrustum = undefined;
         this._suspendTerrainAdjustment = false;
 
@@ -949,8 +949,18 @@ define([
 
             var maxZoomOut = 2.0;
             var ratio = frustum.top / frustum.right;
-            frustum.right = this._maxCoord.x * maxZoomOut;
-            frustum.left = -frustum.right;
+
+            //frustum.right = this._maxCoord.x * maxZoomOut;
+            //frustum.left = -frustum.right;
+
+            //frustum.right = 0.5 * this._maxCoord.width * maxZoomOut;
+            //frustum.left = -frustum.right;
+
+            frustum.right = this._maxCoord.east * maxZoomOut;
+            frustum.left = this._maxCoord.west * maxZoomOut;
+            if (frustum.right < frustum.left) {
+                debugger;
+            }
             frustum.top = ratio * frustum.right;
             frustum.bottom = -frustum.top;
         }
@@ -1490,31 +1500,34 @@ define([
 
     function clampMove2D(camera, position) {
         var rotatable2D = camera._scene.mapMode2D === MapMode2D.ROTATE;
-        var maxProjectedX = camera._maxCoord.x;
-        var maxProjectedY = camera._maxCoord.y;
+        var maxProjectedX = camera._maxCoord.east;
+        var maxProjectedY = camera._maxCoord.north;
+        var minProjectedX = camera._maxCoord.west;
+        var minProjectedY = camera._maxCoord.south;
 
         var minX;
         var maxX;
         if (rotatable2D) {
             maxX = maxProjectedX;
-            minX = -maxX;
+            minX = minProjectedX;
         } else {
             maxX = position.x - maxProjectedX * 2.0;
-            minX = position.x + maxProjectedX * 2.0;
+            //minX = position.x + maxProjectedX * 2.0;
+            minX = position.x - minProjectedX * 2.0;
         }
 
         if (position.x > maxProjectedX) {
             position.x = maxX;
         }
-        if (position.x < -maxProjectedX) {
+        if (position.x < minProjectedX) {
             position.x = minX;
         }
 
         if (position.y > maxProjectedY) {
             position.y = maxProjectedY;
         }
-        if (position.y < -maxProjectedY) {
-            position.y = -maxProjectedY;
+        if (position.y < minProjectedY) {
+            position.y = minProjectedY;
         }
     }
 
@@ -1910,14 +1923,15 @@ define([
             var newTop = frustum.top - amount;
             var newBottom = frustum.bottom + amount;
 
-            var maxBottom = camera._maxCoord.y;
+            var maxBottom = camera._maxCoord.north;
+            var minBottom = camera._maxCoord.south;
             if (camera._scene.mapMode2D === MapMode2D.ROTATE) {
                 maxBottom *= camera.maximumZoomFactor;
             }
 
             if (newBottom > maxBottom) {
                 newBottom = maxBottom;
-                newTop = -maxBottom;
+                newTop = minBottom;
             }
 
             if (newTop <= newBottom) {
@@ -1934,14 +1948,15 @@ define([
             var newRight = frustum.right - amount;
             var newLeft = frustum.left + amount;
 
-            var maxRight = camera._maxCoord.x;
+            var maxRight = camera._maxCoord.west;
+            var maxLeft = camera._maxCoord.east;
             if (camera._scene.mapMode2D === MapMode2D.ROTATE) {
                 maxRight *= camera.maximumZoomFactor;
             }
 
             if (newRight > maxRight) {
                 newRight = maxRight;
-                newLeft = -maxRight;
+                newLeft = maxLeft;
             }
 
             if (newRight <= newLeft) {
@@ -2725,8 +2740,8 @@ define([
         var dWidth = tanTheta * distToC;
         var dHeight = tanPhi * distToC;
 
-        var mapWidth = camera._maxCoord.x;
-        var mapHeight = camera._maxCoord.y;
+        var mapWidth = camera._maxCoord.width;
+        var mapHeight = camera._maxCoord.height;
 
         var maxX = Math.max(dWidth - mapWidth, mapWidth);
         var maxY = Math.max(dHeight - mapHeight, mapHeight);
