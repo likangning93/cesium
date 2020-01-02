@@ -36,4 +36,5 @@ void main()
     // Reflect in eye space and re-project
     positionEC -= ((distanceAbovePlane + distanceAbovePlane) * u_planeEC.xyz);
     gl_Position = czm_projection * vec4(positionEC, 1.0);
+    gl_PointSize = 1.0;
 }
