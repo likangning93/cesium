@@ -36,6 +36,9 @@ import VertexArray from '../Renderer/VertexArray.js';
 
     function PlanarReflectionPostProcessStage(options) {
         var positions = options.positions;
+
+        this._ignoreHeight = defaultValue(options.ignoreHeight, 0.1);
+
         var tileWidth = defaultValue(options.tileWidth, 256);
         var tileHeight = defaultValue(options.tileHeight, 256);
         var name = options.name;
@@ -336,6 +339,9 @@ import VertexArray from '../Renderer/VertexArray.js';
             },
             u_planeEC : function() {
                 return stage._planeEC;
+            },
+            u_ignoreHeight : function() {
+                return stage._ignoreHeight;
             }
         };
 
@@ -369,12 +375,26 @@ import VertexArray from '../Renderer/VertexArray.js';
             u_colorTexture : function() {
                 return stage._colorTexture;
             },
+            u_depthTexture : function() {
+                return stage._depthTexture;
+            },
             u_mirrorColorTexture : function() {
                 return stage._mirrorColorTexture;
+            },
+            u_planeEC : function() {
+                return stage._planeEC;
+            },
+            u_ignoreHeight : function() {
+                return stage._ignoreHeight;
             }
         };
 
-        stage._compositeCommand = context.createViewportQuadCommand(PlanarReflectionComposite, {
+        var compositeShader = new ShaderSource({
+            defines : [stage._useLogDepth ? 'LOG_DEPTH' : ''],
+            sources : [PlanarReflectionComposite]
+        });
+
+        stage._compositeCommand = context.createViewportQuadCommand(compositeShader, {
             uniformMap : uniformMap,
             owner : stage
         });
@@ -395,6 +415,7 @@ import VertexArray from '../Renderer/VertexArray.js';
 
         if (logDepthChanged) {
             destroyMirrorCommands(this);
+            destroyCompositeCommand(this);
         }
 
         var screenWidth = context.drawingBufferWidth;
@@ -457,7 +478,7 @@ import VertexArray from '../Renderer/VertexArray.js';
         // Draw polygon and write stencil.
         this._planarReflectionPolygon.execute(context, this._mirrorFrameBuffer);
 
-        // Execute reflection commands. TODO: Check depth when writing so we don't overwrite stuff that's above the plane with reflection.
+        // Execute reflection commands.
         var tileWidth = this._tileWidth;
         var tileHeight = this._tileHeight;
         var pixelOffset = this._pixelOffset;
@@ -511,17 +532,23 @@ import VertexArray from '../Renderer/VertexArray.js';
         stage._mirrorClearCommand = undefined;
     }
 
+    function destroyCompositeCommand(stage) {
+        var compositeCommand = stage._compositeCommand;
+        if (defined(!compositeCommand)) {
+            return;
+        }
+        compositeCommand.shaderProgram = compositeCommand.shaderProgram && compositeCommand.shaderProgram.destroy();
+
+        stage._compositeCommand = undefined;
+    }
+
     function releaseResources(stage) {
         destroyMirrorFrameBuffer(stage);
         destroyMirrorVertexArray(stage);
         destroyMirrorCommands(stage);
+        destroyCompositeCommand(stage);
 
         stage._planarReflectionPolygon = stage._planarReflectionPolygon && stage._planarReflectionPolygon.destroy();
-
-        if (defined(stage._compositeCommand)) {
-            stage._compositeCommand.shaderProgram = stage._compositeCommand.shaderProgram && stage._compositeCommand.shaderProgram.destroy();
-            stage._compositeCommand = undefined;
-        }
     }
 
     PlanarReflectionPostProcessStage.prototype.destroy = function() {

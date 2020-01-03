@@ -3,6 +3,7 @@ uniform sampler2D u_depthTexture;
 uniform vec2 u_scale;
 uniform vec2 u_pixelOffset;
 uniform vec4 u_planeEC;
+uniform float u_ignoreHeight;
 
 attribute vec2 tilePosition;
 
@@ -28,13 +29,16 @@ void main()
 
     float distanceAbovePlane = czm_planeDistance(u_planeEC, positionEC) + u_planeEC.w; // dunno why this needs the extra add here but *it doooo* :(
 
+    bool ignoreSample = distanceAbovePlane < u_ignoreHeight;
+
     vec4 rgba = texture2D(u_colorTexture, uv);
-    rgba.a = czm_branchFreeTernary(abs(distanceAbovePlane) > 1.0, rgba.a, 0.0);
+    rgba.a = czm_branchFreeTernary(ignoreSample, 0.0, rgba.a);
 
     v_rgba = rgba;
 
     // Reflect in eye space and re-project
-    positionEC -= ((distanceAbovePlane + distanceAbovePlane) * u_planeEC.xyz);
+    float displacementDistance = czm_branchFreeTernary(ignoreSample, 6378137.0, distanceAbovePlane + distanceAbovePlane);
+    positionEC -= (displacementDistance * u_planeEC.xyz);
     gl_Position = czm_projection * vec4(positionEC, 1.0);
     gl_PointSize = 1.0;
 }
