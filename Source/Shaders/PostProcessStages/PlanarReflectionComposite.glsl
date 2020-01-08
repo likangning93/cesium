@@ -4,6 +4,7 @@ uniform sampler2D u_mirrorColorTexture;
 varying vec2 v_textureCoordinates;
 uniform vec4 u_planeEC;
 uniform float u_ignoreHeight;
+uniform float u_reflectionBlendAmount;
 
 vec3 toEye(vec2 uv, float depth)
 {
@@ -23,6 +24,8 @@ void main() {
 
     mirrorColor.a = czm_branchFreeTernary(distanceAbovePlane > u_ignoreHeight, 0.0, mirrorColor.a);
 
-    vec4 color = texture2D(u_colorTexture, v_textureCoordinates);
-    gl_FragColor = mirrorColor * (mirrorColor.a) + color * (1.0 - mirrorColor.a);
+    vec4 sourceColor = texture2D(u_colorTexture, v_textureCoordinates);
+    mirrorColor = mirrorColor * (mirrorColor.a) + sourceColor * (1.0 - mirrorColor.a);
+
+    gl_FragColor = sourceColor * (1.0 - u_reflectionBlendAmount) + (mirrorColor * u_reflectionBlendAmount);
 }

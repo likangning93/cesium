@@ -33,11 +33,13 @@ import VertexArray from '../Renderer/VertexArray.js';
     var dir0Scratch = new Cartesian3();
     var dir1Scratch = new Cartesian3();
     var normalScratch = new Cartesian3();
+    var scratchPlane = new Plane(Cartesian3.UNIT_X, 0.0);
 
     function PlanarReflectionPostProcessStage(options) {
         var positions = options.positions;
-
-        this._ignoreHeight = defaultValue(options.ignoreHeight, 0.1);
+        var plane = options.plane;
+        var ignoreHeight = options.ignoreHeight;
+        var reflectionBlendAmount = options.reflectionBlendAmount;
 
         var tileWidth = defaultValue(options.tileWidth, 256);
         var tileHeight = defaultValue(options.tileHeight, 256);
@@ -48,13 +50,19 @@ import VertexArray from '../Renderer/VertexArray.js';
 
         Check.defined('options.positions', positions);
 
-        var firstPos = positions[0];
-        var dir0 = Cartesian3.subtract(positions[1], firstPos, dir0Scratch);
-        var dir1 = Cartesian3.subtract(positions[2], firstPos, dir1Scratch);
-        var normal = Cartesian3.cross(dir0, dir1, normalScratch);
-        Cartesian3.normalize(normal, normal);
+        if (!defined(plane)) {
+            var firstPos = positions[0];
+            var dir0 = Cartesian3.subtract(positions[1], firstPos, dir0Scratch);
+            var dir1 = Cartesian3.subtract(positions[2], firstPos, dir1Scratch);
+            var normal = Cartesian3.cross(dir0, dir1, normalScratch);
+            Cartesian3.normalize(normal, normal);
+            plane = Plane.fromPointNormal(firstPos, normal, scratchPlane);
+        }
 
-        this._plane = Plane.fromPointNormal(firstPos, normal);
+        this._plane = Plane.clone(plane);
+        this._ignoreHeight = defaultValue(ignoreHeight, 0.1);
+        this.reflectionBlendAmount = defaultValue(reflectionBlendAmount, 0.5);
+
         this._tileWidth = tileWidth;
         this._tileHeight = tileHeight;
         this._screenWidth = 0;
@@ -386,6 +394,9 @@ import VertexArray from '../Renderer/VertexArray.js';
             },
             u_ignoreHeight : function() {
                 return stage._ignoreHeight;
+            },
+            u_reflectionBlendAmount : function() {
+                return stage.reflectionBlendAmount;
             }
         };
 
