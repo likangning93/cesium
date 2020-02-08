@@ -15,6 +15,7 @@ import Cesium3DTileBatchTable from './Cesium3DTileBatchTable.js';
 import Vector3DTilePoints from './Vector3DTilePoints.js';
 import Vector3DTilePolygons from './Vector3DTilePolygons.js';
 import Vector3DTilePolylines from './Vector3DTilePolylines.js';
+import Vector3DTileClampedPolylines from './Vector3DTileClampedPolylines.js';
 
     /**
      * Represents the contents of a
@@ -221,6 +222,14 @@ import Vector3DTilePolylines from './Vector3DTilePolylines.js';
     var sizeOfUint16 = Uint16Array.BYTES_PER_ELEMENT;
     var sizeOfUint32 = Uint32Array.BYTES_PER_ELEMENT;
 
+    function createFloatingPolylines(options) {
+        return new Vector3DTilePolylines(options);
+    }
+
+    function createClampedPolylines(options) {
+        return new Vector3DTileClampedPolylines(options);
+    }
+
     function initialize(content, arrayBuffer, byteOffset) {
         byteOffset = defaultValue(byteOffset, 0);
 
@@ -391,7 +400,12 @@ import Vector3DTilePolylines from './Vector3DTilePolylines.js';
                 widths = new Uint16Array(featureTableBinary.buffer, polylineWidthsByteOffset, numberOfPolylines);
             }
 
-            content._polylines = new Vector3DTilePolylines({
+            var tileset = content._tileset;
+            var createPolylines = createFloatingPolylines;
+            if (defined(tileset.classificationType)) {
+                createPolylines = createClampedPolylines;
+            }
+            content._polylines = createPolylines({
                 positions : polylinePositions,
                 widths : widths,
                 counts : polylineCounts,
@@ -401,7 +415,8 @@ import Vector3DTilePolylines from './Vector3DTilePolylines.js';
                 center : center,
                 rectangle : rectangle,
                 boundingVolume : content.tile.boundingVolume.boundingVolume,
-                batchTable : batchTable
+                batchTable : batchTable,
+                tileset : tileset
             });
         }
 
@@ -505,6 +520,8 @@ import Vector3DTilePolylines from './Vector3DTilePolylines.js';
             var that = this;
             this._contentReadyPromise = when.all([pointsPromise, polygonPromise, polylinePromise]).then(function() {
                 that._readyPromise.resolve(that);
+            }).otherwise(function(error) {
+                that._readyPromise.reject(error);
             });
         }
     };

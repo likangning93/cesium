@@ -518,4 +518,31 @@ describe('Renderer/BuiltinFunctions', function() {
         }).contextToRender();
     });
 
+    function testDecodeUInt16(uint16) {
+        var high = Math.floor(uint16 / 256);
+        var low = uint16 - (high * 256);
+
+        var fsDecode =
+            'void main() { ' +
+            '  gl_FragColor = vec4(czm_decodeUint16(' + low + ', ' + high + ') == ' + uint16 + ');' +
+            '}';
+        expect({
+            context : context,
+            fragmentShader : fsDecode
+        }).contextToRender();
+    }
+
+    it('has czm_decodeUint16', function() {
+        testDecodeUInt16(0);
+        testDecodeUInt16(1);
+        testDecodeUInt16(32);
+        testDecodeUInt16(255);
+        testDecodeUInt16(256);
+        testDecodeUInt16(1023);
+        testDecodeUInt16(1024);
+        testDecodeUInt16(1025);
+        testDecodeUInt16(65500);
+        testDecodeUInt16(65534);
+        testDecodeUInt16(65535);
+    });
 }, 'WebGL');
