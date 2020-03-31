@@ -26,7 +26,7 @@ import WebGLConstants from '../Core/WebGLConstants.js';
     datatypeToGlsl[WebGLConstants.FLOAT_MAT2] = 'mat2';
     datatypeToGlsl[WebGLConstants.FLOAT_MAT3] = 'mat3';
     datatypeToGlsl[WebGLConstants.FLOAT_MAT4] = 'mat4';
-    datatypeToGlsl[WebGLConstants.SAMPLER_2D] = 'sampler2D';
+    datatypeToGlsl[WebGLConstants.SAMPLER_2D] = 'highp sampler2D';
     datatypeToGlsl[WebGLConstants.SAMPLER_CUBE] = 'samplerCube';
 
     AutomaticUniform.prototype.getDeclaration = function(name) {

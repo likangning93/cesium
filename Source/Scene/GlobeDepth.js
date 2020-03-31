@@ -73,7 +73,7 @@ import StencilOperation from './StencilOperation.js';
     function executeDebugGlobeDepth(globeDepth, context, passState, useLogDepth) {
         if (!defined(globeDepth._debugGlobeDepthViewportCommand) || useLogDepth !== globeDepth._useLogDepth) {
             var fsSource =
-                'uniform sampler2D u_depthTexture;\n' +
+                'uniform highp sampler2D u_depthTexture;\n' +
                 'varying vec2 v_textureCoordinates;\n' +
                 'void main()\n' +
                 '{\n' +
