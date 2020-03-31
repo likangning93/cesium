@@ -5,6 +5,9 @@ import destroyObject from '../Core/destroyObject.js';
 import PixelFormat from '../Core/PixelFormat.js';
 import ClearCommand from '../Renderer/ClearCommand.js';
 import Framebuffer from '../Renderer/Framebuffer.js';
+import TextureWrap from '../Renderer/TextureWrap.js';
+import TextureMinificationFilter from '../Renderer/TextureMinificationFilter.js';
+import TextureMagnificationFilter from '../Renderer/TextureMagnificationFilter.js';
 import PixelDatatype from '../Renderer/PixelDatatype.js';
 import RenderState from '../Renderer/RenderState.js';
 import Sampler from '../Renderer/Sampler.js';
@@ -16,6 +19,14 @@ import BlendingState from './BlendingState.js';
 import StencilConstants from './StencilConstants.js';
 import StencilFunction from './StencilFunction.js';
 import StencilOperation from './StencilOperation.js';
+
+var samplerLinear = new Sampler({
+    wrapS : TextureWrap.CLAMP_TO_EDGE,
+    wrapT : TextureWrap.CLAMP_TO_EDGE,
+    minificationFilter : TextureMinificationFilter.NEAREST,
+    magnificationFilter : TextureMagnificationFilter.NEAREST
+});
+var sampler = Sampler.NEAREST;
 
     /**
      * @private
@@ -129,7 +140,7 @@ import StencilOperation from './StencilOperation.js';
             height : height,
             pixelFormat : PixelFormat.RGBA,
             pixelDatatype : PixelDatatype.UNSIGNED_BYTE,
-            sampler : Sampler.NEAREST
+            sampler : sampler
         });
         globeDepth._tempCopyDepthFramebuffer = new Framebuffer({
             context : context,
@@ -152,7 +163,7 @@ import StencilOperation from './StencilOperation.js';
             height : height,
             pixelFormat : PixelFormat.RGBA,
             pixelDatatype : pixelDatatype,
-            sampler : Sampler.NEAREST
+            sampler : sampler
         });
 
         globeDepth._depthStencilTexture = new Texture({
@@ -169,7 +180,7 @@ import StencilOperation from './StencilOperation.js';
             height : height,
             pixelFormat : PixelFormat.RGBA,
             pixelDatatype : PixelDatatype.UNSIGNED_BYTE,
-            sampler : Sampler.NEAREST
+            sampler : sampler
         });
     }
 
@@ -196,7 +207,7 @@ import StencilOperation from './StencilOperation.js';
             height : height,
             pixelFormat : PixelFormat.RGBA,
             pixelDatatype : pixelDatatype,
-            sampler : Sampler.NEAREST
+            sampler : sampler
         });
 
         globeDepth._primitiveColorFramebuffer = new Framebuffer({
