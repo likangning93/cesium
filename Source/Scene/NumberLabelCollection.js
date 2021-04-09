@@ -3,6 +3,7 @@ import BlendingState from "../Scene/BlendingState.js";
 import BoundingSphere from "../Core/BoundingSphere.js";
 import Cartesian2 from "../Core/Cartesian2.js";
 import Cartesian3 from "../Core/Cartesian3.js";
+import Color from "../Core/Color.js";
 import ComponentDatatype from "../Core/ComponentDatatype.js";
 import createGuid from "../Core/createGuid.js";
 import Geometry from "../Core/Geometry.js";
@@ -30,29 +31,33 @@ import Transforms from "../Core/Transforms.js";
 import writeTextToCanvas from "../Core/writeTextToCanvas.js";
 
 var FONT = "16px monospace";
-var ALLOWED_CHARS = "0123456789-+.,e ";
+var ALLOWED_CHARS = "0123456789-+.,e";
 var ALLOWED_CHARS_LENGTH = ALLOWED_CHARS.length;
 
-var SPACE_INDEX = ALLOWED_CHARS.indexOf(" ");
+var SPACE_INDEX = ALLOWED_CHARS_LENGTH;
 var CHARS_TO_INDICES = {};
 for (var c = 0; c < ALLOWED_CHARS_LENGTH; c++) {
   CHARS_TO_INDICES[ALLOWED_CHARS[c]] = c;
 }
+CHARS_TO_INDICES[" "] = ALLOWED_CHARS_LENGTH;
 
-function NumberLabelCollection(ellipsoid) {
+function NumberLabelCollection(ellipsoid, backgroundColor) {
   this._labels = [];
   this._boundingSphere = new BoundingSphere(Cartesian3.ZERO, 0.0);
 
   this._glyphTexture = undefined;
   this._glyphDimensions = new Cartesian2();
+  this._glyphPixelSize = new Cartesian2();
 
   this._primitive = undefined;
   this._recreatePrimitive = true;
   this._typesetAll = false;
 
   this._enuToFixedFrame = new Matrix4();
+  this._fixedFrameToEnu = new Matrix4();
   this._ellipsoid = defaultValue(ellipsoid, Ellipsoid.WGS84);
 
+  this._backgroundColor = defaultValue(backgroundColor, Color.BLACK);
   this._renderState = RenderState.fromCache({
     cull: {
       enabled: true,
@@ -65,11 +70,17 @@ function NumberLabelCollection(ellipsoid) {
 
   var that = this;
   this._uniformMap = {
+    u_glyphDimensions: function () {
+      return that._glyphDimensions;
+    },
+    u_glyphPixelSize: function () {
+      return that._glyphPixelSize;
+    },
     u_glyphs: function () {
       return that._glyphTexture;
     },
-    u_glyphDimensions: function () {
-      return that._glyphDimensions;
+    u_backgroundColor: function () {
+      return that._backgroundColor;
     },
   };
 
@@ -120,7 +131,7 @@ NumberLabelCollection.prototype.remove = function (label) {
  * | \|  // 2 - 10 - lower right
  * 0--2  // 3 - 11 - upper right
  */
-var VERTEX_INDICES = new Uint8Array([0, 2, 1, 3]);
+var VERTEX_INDICES = new Uint8Array([0, 2, 1, 2, 3, 1]);
 
 function createGeometryInstancesForLabel(numberLabel, charCount, instances) {
   var batchIds = numberLabel._batchIds;
@@ -136,7 +147,7 @@ function createGeometryInstancesForLabel(numberLabel, charCount, instances) {
           values: VERTEX_INDICES,
         }),
       },
-      primitiveType: PrimitiveType.TRIANGLE_STRIP,
+      primitiveType: PrimitiveType.TRIANGLES,
       boundingSphere: numberLabel._boundingSphere,
     });
 
@@ -184,11 +195,14 @@ function createGeometryInstancesForLabel(numberLabel, charCount, instances) {
 var offsetFromCenterScratch = new Cartesian3();
 function typeSetLabel(numberLabel, numberLabelCollection) {
   var primitive = numberLabelCollection._primitive;
-  var collectionCenter = numberLabelCollection._boundingSphere.center;
 
   // compute label's current offset from collection center
   var offsetFromCenter = offsetFromCenterScratch;
-  Cartesian3.subtract(collectionCenter, numberLabel.position, offsetFromCenter);
+  Matrix4.multiplyByPoint(
+    numberLabelCollection._fixedFrameToEnu,
+    numberLabel.position,
+    offsetFromCenter
+  );
   var packedTranslation = Cartesian3.pack(offsetFromCenter, [0, 0, 0]);
 
   // compute 2D rotation params in collection-local space for heading
@@ -227,14 +241,26 @@ function createGlyphTexture(numberLabelCollection, frameState) {
     font: FONT,
   });
 
-  numberLabelCollection._glyphDimensions.x =
-    canvas.width / ALLOWED_CHARS_LENGTH;
-  numberLabelCollection._glyphDimensions.y = canvas.height;
+  var glyphDimensions = numberLabelCollection._glyphDimensions;
+  var glyphPixelSize = numberLabelCollection._glyphPixelSize;
+
+  var canvasWidth = canvas.width;
+  var canvasHeight = canvas.height;
+
+  glyphDimensions.x = canvasWidth / ALLOWED_CHARS_LENGTH;
+  glyphDimensions.y = canvasHeight;
+
+  console.log("canvas width: " + canvasWidth);
+  console.log("allowed chars: " + ALLOWED_CHARS_LENGTH);
+  console.log("glyph dimensions: " + glyphDimensions.x);
+
+  glyphPixelSize.x = 1.0 / canvasWidth;
+  glyphPixelSize.y = 1.0 / canvasHeight;
 
   numberLabelCollection._glyphTexture = new Texture({
     context: frameState.context,
-    width: canvas.width,
-    height: canvas.height,
+    width: canvasWidth,
+    height: canvasHeight,
     source: canvas,
     sampler: new Sampler({
       minificationFilter: TextureMinificationFilter.NEAREST,
@@ -319,6 +345,8 @@ function createPrimitive(numberLabelCollection) {
     numberLabelCollection._ellipsoid,
     enuToFixedFrame
   );
+
+  Matrix4.inverse(enuToFixedFrame, numberLabelCollection._fixedFrameToEnu);
 
   // Create GeometryInstances for character cards
   var geometryInstances = [];
