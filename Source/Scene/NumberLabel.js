@@ -94,6 +94,24 @@ Object.defineProperties(NumberLabel.prototype, {
       makeDirty(this);
     },
   },
+
+  /**
+   * Vertical origin for the NumberLabel. VerticalOrigin.BASELINE is not supported at the moment.
+   * @memberof NumberLabel.prototype
+   * @type {String}
+   */
+  verticalOrigin: {
+    get: function () {
+      return this._verticalOrigin;
+    },
+    set: function (value) {
+      if (this._verticalOrigin === value) {
+        return;
+      }
+      this._verticalOrigin = value;
+      makeDirty(this);
+    },
+  },
 });
 
 export default NumberLabel;

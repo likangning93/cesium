@@ -1,7 +1,7 @@
 /*eslint-disable*/
 export default `
-uniform vec2 u_glyphDimensions;
 uniform vec2 u_glyphPixelSize;
+uniform vec2 u_singlePixelSize;
 
 attribute float position;
 attribute float batchId;
@@ -13,7 +13,7 @@ const float SHIFT_RIGHT1 = 1.0 / 2.0;
 
 void main() {
   float characterId = czm_batchTable_characterId(batchId);
-  float characterLeftAlign = czm_batchTable_characterLeftAlign(batchId);
+  vec2 characterBottomLeftAlign = czm_batchTable_characterBottomLeftAlign(batchId);
   vec2 labelRotation = czm_batchTable_labelRotation(batchId);
   vec3 pos3D = czm_batchTable_labelTranslationFromCenter(batchId);
 
@@ -30,15 +30,17 @@ void main() {
   vertexOffset.y = position - (2.0 * floor(position / 2.0)); // modulo
 
   v_texcoords = vec2((characterId + vertexOffset.x) / ALLOWED_CHARS_LENGTH, vertexOffset.y);
-  v_texcoords.x -= u_glyphPixelSize.x;
+  v_texcoords.x -= u_singlePixelSize.x;
   // scale and translate Y texcoords a bit so there's a bit of vertical padding
-  v_texcoords.y *= ((u_glyphDimensions.y + 4.0) / (u_glyphDimensions.y));
-  v_texcoords.y -= u_glyphPixelSize.y * 2.0;
+  v_texcoords.y *= ((u_glyphPixelSize.y + 4.0) / (u_glyphPixelSize.y));
+  v_texcoords.y -= u_singlePixelSize.y * 2.0;
 
   //v_position = position;
 
-  vertexOffset.x = (vertexOffset.x + characterLeftAlign) * u_glyphDimensions.x * metersPerPixel;
-  vertexOffset.y = vertexOffset.y * u_glyphDimensions.y * metersPerPixel;
+  vertexOffset.x = (vertexOffset.x + characterBottomLeftAlign.x) * u_glyphPixelSize.x * metersPerPixel;
+
+  float yOffset = (characterBottomLeftAlign.y * 0.5) - 0.5;
+  vertexOffset.y = (vertexOffset.y + yOffset) * u_glyphPixelSize.y * metersPerPixel;
 
   mat2 rotation = mat2(labelRotation.x, labelRotation.y, -labelRotation.y, labelRotation.x);
   pos3D.xy += vertexOffset * rotation;

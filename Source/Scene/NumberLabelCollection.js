@@ -48,8 +48,8 @@ function NumberLabelCollection(ellipsoid, backgroundColor, pixelHeight) {
   this._pixelHeight = defaultValue(pixelHeight, 24);
 
   this._glyphTexture = undefined;
-  this._glyphDimensions = new Cartesian2();
   this._glyphPixelSize = new Cartesian2();
+  this._singlePixelSize = new Cartesian2();
 
   this._primitive = undefined;
   this._recreatePrimitive = true;
@@ -72,11 +72,11 @@ function NumberLabelCollection(ellipsoid, backgroundColor, pixelHeight) {
 
   var that = this;
   this._uniformMap = {
-    u_glyphDimensions: function () {
-      return that._glyphDimensions;
-    },
     u_glyphPixelSize: function () {
       return that._glyphPixelSize;
+    },
+    u_singlePixelSize: function () {
+      return that._singlePixelSize;
     },
     u_glyphs: function () {
       return that._glyphTexture;
@@ -160,11 +160,11 @@ function createGeometryInstancesForLabel(numberLabel, charCount, instances) {
         normalize: false,
         value: [SPACE_INDEX],
       }),
-      characterLeftAlign: new GeometryInstanceAttribute({
+      characterBottomLeftAlign: new GeometryInstanceAttribute({
         componentDatatype: ComponentDatatype.BYTE,
-        componentsPerAttribute: 1,
+        componentsPerAttribute: 2,
         normalize: false,
-        value: [0],
+        value: [0, 0],
       }),
       labelRotation: new GeometryInstanceAttribute({
         componentDatatype: ComponentDatatype.FLOAT,
@@ -217,13 +217,24 @@ function typeSetLabel(numberLabel, numberLabelCollection) {
   var i;
   var attributes;
 
+  var verticalOrigin = numberLabel.verticalOrigin;
+  var charVerticalOffset = 0;
+  if (verticalOrigin === VerticalOrigin.BOTTOM) {
+    charVerticalOffset = 1;
+  } else if (verticalOrigin === VerticalOrigin.TOP) {
+    charVerticalOffset = -1;
+  }
+
   var stringLeftAlign = -Math.floor(numberStringLength * 0.5); // signed byte
   for (i = 0; i < numberStringLength; i++) {
     attributes = primitive.getGeometryInstanceAttributes(batchIds[i]);
 
     // character and offset to the right place in the string
     attributes.characterId = [CHARS_TO_INDICES[numberString[i]]];
-    attributes.characterLeftAlign = [stringLeftAlign + i];
+    attributes.characterBottomLeftAlign = [
+      stringLeftAlign + i,
+      charVerticalOffset,
+    ];
 
     // common across all chars in label
     attributes.labelRotation = rotationComponents;
@@ -243,22 +254,22 @@ function createGlyphTexture(numberLabelCollection, frameState) {
     font: numberLabelCollection._pixelHeight + FONT,
   });
 
-  var glyphDimensions = numberLabelCollection._glyphDimensions;
   var glyphPixelSize = numberLabelCollection._glyphPixelSize;
+  var singlePixelSize = numberLabelCollection._singlePixelSize;
 
   var canvasWidth = canvas.width;
   var canvasHeight = canvas.height;
 
-  glyphDimensions.x = canvasWidth / ALLOWED_CHARS_LENGTH;
-  glyphDimensions.y = canvasHeight;
+  glyphPixelSize.x = canvasWidth / ALLOWED_CHARS_LENGTH;
+  glyphPixelSize.y = canvasHeight;
 
   console.log("canvas width:     " + canvasWidth);
   console.log("canvas height:    " + canvasHeight);
   console.log("allowed chars:    " + ALLOWED_CHARS_LENGTH);
-  console.log("glyph dimensions: " + glyphDimensions.x);
+  console.log("glyph dimensions: " + glyphPixelSize.x);
 
-  glyphPixelSize.x = 1.0 / canvasWidth;
-  glyphPixelSize.y = 1.0 / canvasHeight;
+  singlePixelSize.x = 1.0 / canvasWidth;
+  singlePixelSize.y = 1.0 / canvasHeight;
 
   numberLabelCollection._glyphTexture = new Texture({
     context: frameState.context,
