@@ -59,23 +59,37 @@
           0.0,
           0.0
         );
-        numberLabelCollection.add({
+        var label0 = numberLabelCollection.add({
           numberString: "-+0987654321.,e", //"0.0, 0.0",
           position: zeroZeroCartesian,
           heading: 0.0,
         });
 
-        numberLabelCollection.add({
+        var label1 = numberLabelCollection.add({
           numberString: "+99.0, 0.0",
           position: new Cesium.Cartesian3(WGS84.maximumRadius, 99.0, 0.0),
           heading: 1.57,
         });
 
-        numberLabelCollection.add({
+        var label2 = numberLabelCollection.add({
           numberString: "0.0, -99.0",
           position: new Cesium.Cartesian3(WGS84.maximumRadius, 0.0, -99.0),
           heading: 3.14159,
         });
+
+        var pointPrimitives = viewer.scene.primitives.add(
+          new Cesium.PointPrimitiveCollection()
+        );
+        function addPoint(location) {
+          pointPrimitives.add({
+            color: Cesium.Color.YELLOW,
+            position: location,
+          });
+        }
+
+        addPoint(label0.position);
+        addPoint(label1.position);
+        addPoint(label2.position);
 
         viewer.scene.primitives.add(numberLabelCollection);
 

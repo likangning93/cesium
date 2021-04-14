@@ -1,5 +1,8 @@
 import BoundingSphere from "../Core/BoundingSphere.js";
 import Cartesian3 from "../Core/Cartesian3.js";
+import defaultValue from "../Core/defaultValue.js";
+import DeveloperError from "../Core/DeveloperError.js";
+import VerticalOrigin from "./VerticalOrigin.js";
 
 /**
  * A NumberLabel oriented in 3D space, for use with elevation contours and such.
@@ -9,15 +12,24 @@ import Cartesian3 from "../Core/Cartesian3.js";
  * @param {String} options.numberString A string representing the number to be displayed, with desired truncation, decimal separation, etc. Should only contain characters 0123456789,.e+-.
  * @param {Cartesian3} options.position the Position at which to display the number label
  * @param {Number} options.heading the heading for the NumberLabel
+ * @param {VerticalOrigin} [options.verticalOrigin=VerticalOrigin.TOP] Vertical origin for the NumberLabel. VerticalOrigin.BASELINE is not supported at the moment.
  * @param {NumberLabelCollection} The NumberLabelCollection that this NumberLabel belongs to.
  */
 function NumberLabel(options, numberLabelCollection) {
   // TODO: checks, also check if numberString only contains valid chars
 
+  if (options.verticalOrigin === VerticalOrigin.BASELINE) {
+    throw new DeveloperError("VerticalOrigin.BASELINE is not supported yet.");
+  }
+
   this._numberString = options.numberString;
   this._position = Cartesian3.clone(options.position);
   this._heading = options.heading;
   this._numberLabelCollection = numberLabelCollection;
+  this._verticalOrigin = defaultValue(
+    options.verticalOrigin,
+    VerticalOrigin.TOP
+  );
 
   this._boundingSphere = new BoundingSphere(Cartesian3.ZERO, 0.0);
   this._batchIds = [];

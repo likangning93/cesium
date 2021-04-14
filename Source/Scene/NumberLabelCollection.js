@@ -28,9 +28,10 @@ import Texture from "../Renderer/Texture.js";
 import TextureMagnificationFilter from "../Renderer/TextureMagnificationFilter.js";
 import TextureMinificationFilter from "../Renderer/TextureMinificationFilter.js";
 import Transforms from "../Core/Transforms.js";
+import VerticalOrigin from "./VerticalOrigin.js";
 import writeTextToCanvas from "../Core/writeTextToCanvas.js";
 
-var FONT = "16px monospace";
+var FONT = "px monospace";
 var ALLOWED_CHARS = "0123456789-+.,e";
 var ALLOWED_CHARS_LENGTH = ALLOWED_CHARS.length;
 
@@ -41,9 +42,10 @@ for (var c = 0; c < ALLOWED_CHARS_LENGTH; c++) {
 }
 CHARS_TO_INDICES[" "] = ALLOWED_CHARS_LENGTH;
 
-function NumberLabelCollection(ellipsoid, backgroundColor) {
+function NumberLabelCollection(ellipsoid, backgroundColor, pixelHeight) {
   this._labels = [];
   this._boundingSphere = new BoundingSphere(Cartesian3.ZERO, 0.0);
+  this._pixelHeight = defaultValue(pixelHeight, 24);
 
   this._glyphTexture = undefined;
   this._glyphDimensions = new Cartesian2();
@@ -238,7 +240,7 @@ function typeSetLabel(numberLabel, numberLabelCollection) {
 
 function createGlyphTexture(numberLabelCollection, frameState) {
   var canvas = writeTextToCanvas(ALLOWED_CHARS, {
-    font: FONT,
+    font: numberLabelCollection._pixelHeight + FONT,
   });
 
   var glyphDimensions = numberLabelCollection._glyphDimensions;
@@ -250,8 +252,9 @@ function createGlyphTexture(numberLabelCollection, frameState) {
   glyphDimensions.x = canvasWidth / ALLOWED_CHARS_LENGTH;
   glyphDimensions.y = canvasHeight;
 
-  console.log("canvas width: " + canvasWidth);
-  console.log("allowed chars: " + ALLOWED_CHARS_LENGTH);
+  console.log("canvas width:     " + canvasWidth);
+  console.log("canvas height:    " + canvasHeight);
+  console.log("allowed chars:    " + ALLOWED_CHARS_LENGTH);
   console.log("glyph dimensions: " + glyphDimensions.x);
 
   glyphPixelSize.x = 1.0 / canvasWidth;
@@ -263,8 +266,8 @@ function createGlyphTexture(numberLabelCollection, frameState) {
     height: canvasHeight,
     source: canvas,
     sampler: new Sampler({
-      minificationFilter: TextureMinificationFilter.NEAREST,
-      magnificationFilter: TextureMagnificationFilter.NEAREST,
+      minificationFilter: TextureMinificationFilter.LINEAR,
+      magnificationFilter: TextureMagnificationFilter.LINEAR,
     }),
   });
 }

@@ -17,6 +17,9 @@ void main() {
   vec2 labelRotation = czm_batchTable_labelRotation(batchId);
   vec3 pos3D = czm_batchTable_labelTranslationFromCenter(batchId);
 
+  vec4 pos3dEC = czm_modelView * vec4(pos3D, 1.0);
+  float metersPerPixel = max(0.0, czm_metersPerPixel(pos3dEC));
+
   // Figure out where this vertex goes in the glyph card
   // 1--3  // 0 - 00 - lower left
   // |\ |  // 1 - 01 - upper left
@@ -34,8 +37,8 @@ void main() {
 
   //v_position = position;
 
-  vertexOffset.x = (vertexOffset.x + characterLeftAlign) * u_glyphDimensions.x;
-  vertexOffset.y = vertexOffset.y * u_glyphDimensions.y;
+  vertexOffset.x = (vertexOffset.x + characterLeftAlign) * u_glyphDimensions.x * metersPerPixel;
+  vertexOffset.y = vertexOffset.y * u_glyphDimensions.y * metersPerPixel;
 
   mat2 rotation = mat2(labelRotation.x, labelRotation.y, -labelRotation.y, labelRotation.x);
   pos3D.xy += vertexOffset * rotation;
