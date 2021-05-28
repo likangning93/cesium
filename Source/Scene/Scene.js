@@ -52,6 +52,7 @@ import GlobeTranslucencyState from "./GlobeTranslucencyState.js";
 import InvertClassification from "./InvertClassification.js";
 import JobScheduler from "./JobScheduler.js";
 import MapMode2D from "./MapMode2D.js";
+import MultitextureClampBuffer from "./MultitextureClampBuffer.js";
 import OctahedralProjectedCubeMap from "./OctahedralProjectedCubeMap.js";
 import PerformanceDisplay from "./PerformanceDisplay.js";
 import PerInstanceColorAppearance from "./PerInstanceColorAppearance.js";
@@ -570,6 +571,11 @@ function Scene(options) {
     lightCamera: this._shadowMapCamera,
     enabled: defaultValue(options.shadows, false),
   });
+
+  /**
+   * Buffer used for clamping using multitexturing.
+   */
+  this._multitextureClampBuffer = new MultitextureClampBuffer();
 
   /**
    * When <code>false</code>, 3D Tiles will render normally. When <code>true</code>, classified 3D Tile geometry will render normally and
@@ -1757,6 +1763,7 @@ Scene.prototype.updateDerivedCommands = function (command) {
   }
 
   var frameState = this._frameState;
+  var multitextureFramebuffer = this._multitextureClampBuffer.framebuffer;
   var context = this._context;
 
   // Update derived commands when any shadow maps become dirty
@@ -1768,7 +1775,8 @@ Scene.prototype.updateDerivedCommands = function (command) {
     shadowsDirty = true;
   }
 
-  var useLogDepth = frameState.useLogDepth;
+  var useLogDepth =
+    frameState.useLogDepth && command.framebuffer !== multitextureFramebuffer;
   var useHdr = this._hdr;
   var derivedCommands = command.derivedCommands;
   var hasLogDepthDerivedCommands = defined(derivedCommands.logDepth);
@@ -1887,6 +1895,7 @@ Scene.prototype.updateFrameState = function () {
   var frameState = this._frameState;
   frameState.commandList.length = 0;
   frameState.shadowMaps.length = 0;
+  frameState.multitextureClampBuffer = undefined;
   frameState.brdfLutGenerator = this._brdfLutGenerator;
   frameState.environmentMap = this.skyBox && this.skyBox._cubeMap;
   frameState.mode = this._mode;
@@ -2383,11 +2392,15 @@ function executeCommands(scene, passState) {
 
   var height2D = camera.position.z;
 
+  us.numberOfFrustums = numFrustums;
+
   // Execute commands in each frustum in back to front order
   var j;
   for (var i = 0; i < numFrustums; ++i) {
     var index = numFrustums - i - 1;
     var frustumCommands = frustumCommandsList[index];
+
+    us.currentFrustumNumber = index;
 
     if (scene.mode === SceneMode.SCENE2D) {
       // To avoid z-fighting in 2D, move the camera to just before the frustum
@@ -2470,6 +2483,8 @@ function executeCommands(scene, passState) {
       passState.framebuffer = fb;
     }
 
+    scene._multitextureClampBuffer.updateBounds(frameState, passState);
+
     // Draw terrain classification
     if (!environmentState.renderTranslucentDepthForPick) {
       us.updatePass(Pass.TERRAIN_CLASSIFICATION);
@@ -2490,6 +2505,8 @@ function executeCommands(scene, passState) {
         }
       }
     }
+
+    scene._multitextureClampBuffer.composite(context, passState);
 
     if (clearGlobeDepth) {
       clearDepth.execute(context, passState);
@@ -3392,6 +3409,8 @@ function updateShadowMaps(scene) {
 function updateAndRenderPrimitives(scene) {
   var frameState = scene._frameState;
 
+  frameState.multitextureClampBuffer = scene._multitextureClampBuffer;
+
   scene._groundPrimitives.update(frameState);
   scene._primitives.update(frameState);
 
@@ -3881,6 +3900,8 @@ Scene.prototype.render = function (time) {
     );
     updateFrameNumber(this, frameNumber, time);
     frameState.newFrame = true;
+
+    this._multitextureClampBuffer.updateResources(frameState);
   }
 
   tryAndCatchError(this, prePassesUpdate);

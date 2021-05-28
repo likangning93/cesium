@@ -16,7 +16,6 @@ import Cesium3DTileFeatureTable from "./Cesium3DTileFeatureTable.js";
 import Vector3DTilePoints from "./Vector3DTilePoints.js";
 import Vector3DTilePolygons from "./Vector3DTilePolygons.js";
 import Vector3DTilePolylines from "./Vector3DTilePolylines.js";
-import Vector3DTileClampedPolylines from "./Vector3DTileClampedPolylines.js";
 import decodeVectorPolylinePositions from "../Core/decodeVectorPolylinePositions.js";
 
 /**
@@ -259,14 +258,6 @@ function getBatchIds(featureTableJson, featureTableBinary) {
 }
 
 var sizeOfUint32 = Uint32Array.BYTES_PER_ELEMENT;
-
-function createFloatingPolylines(options) {
-  return new Vector3DTilePolylines(options);
-}
-
-function createClampedPolylines(options) {
-  return new Vector3DTileClampedPolylines(options);
-}
 
 function initialize(content, arrayBuffer, byteOffset) {
   byteOffset = defaultValue(byteOffset, 0);
@@ -573,12 +564,7 @@ function initialize(content, arrayBuffer, byteOffset) {
       );
     }
 
-    var createPolylines = createFloatingPolylines;
-    if (defined(tileset.classificationType)) {
-      createPolylines = createClampedPolylines;
-    }
-
-    content._polylines = createPolylines({
+    content._polylines = new Vector3DTilePolylines({
       positions: polylinePositions,
       widths: widths,
       counts: polylineCounts,

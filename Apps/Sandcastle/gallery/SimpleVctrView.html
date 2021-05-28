@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no"
+    />
+    <meta
+      name="description"
+      content="Demo the minimum set of options needed to remove all external dependencies, for offline operation."
+    />
+    <meta name="cesium-sandcastle-labels" content="Beginner, Showcases" />
+    <title>Cesium Demo</title>
+    <script type="text/javascript" src="../Sandcastle-header.js"></script>
+    <script
+      type="text/javascript"
+      src="../../../ThirdParty/requirejs-2.1.20/require.js"
+    ></script>
+    <script type="text/javascript">
+      require.config({
+        baseUrl: "../../../Source",
+        waitSeconds: 60,
+      });
+    </script>
+  </head>
+  <body
+    class="sandcastle-loading"
+    data-sandcastle-bucket="bucket-requirejs.html"
+  >
+    <style>
+      @import url(../templates/bucket.css);
+    </style>
+    <div id="cesiumContainer" class="fullSize"></div>
+    <div id="loadingOverlay"><h1>Loading...</h1></div>
+    <div id="toolbar"></div>
+    <script id="cesium_sandcastle_script">
+      function startup(Cesium) {
+        "use strict";
+        //Sandcastle_Begin
+        Cesium.Ion.defaultAccessToken =
+          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIwMTUzN2QyNS03OWVlLTQ5NTUtYTc3Yy04OGZhYmExZGMyNTMiLCJpZCI6MTE2NzksInNjb3BlcyI6WyJhc3IiLCJnYyJdLCJpYXQiOjE1NTk1NzQxODl9.V21N_lGnZlCdAoeYZ4DMFoaZ_svVuUcCbKGgNlJfWIA";
+
+        var viewer = new Cesium.Viewer("cesiumContainer", {
+          imageryProvider: new Cesium.TileMapServiceImageryProvider({
+            url: Cesium.buildModuleUrl("Assets/Textures/NaturalEarthII"),
+          }),
+          requestRenderMode: true,
+        });
+
+        viewer.scene.debugShowFramesPerSecond = true;
+        //viewer.extend(Cesium.viewerCesiumInspectorMixin);
+        //viewer.scene.logarithmicDepthBuffer = false;
+
+        var clampedTileset = new Cesium.Cesium3DTileset({
+          url:
+            "../../../Specs/Data/Cesium3DTiles/Vector/VectorTilePolylines/tileset.json",
+          classificationType: Cesium.ClassificationType.BOTH,
+        });
+
+        clampedTileset.debugShowBoundingVolume = true;
+
+        viewer.scene.primitives.add(clampedTileset);
+        viewer.zoomTo(clampedTileset);
+
+        viewer.scene._multitextureClampBuffer.debugShowTextureCoordinates = true;
+
+        Sandcastle.addToolbarButton("toggle clampedTileset", function () {
+          clampedTileset.show = !clampedTileset.show;
+          viewer.scene.requestRender();
+        });
+
+        var tileset = new Cesium.Cesium3DTileset({
+          url:
+            "../../../Specs/Data/Cesium3DTiles/Vector/VectorTilePolylines/tileset.json",
+        });
+
+        tileset.debugShowBoundingVolume = false;
+        tileset.show = false;
+
+        viewer.scene.primitives.add(tileset);
+
+        Sandcastle.addToolbarButton("toggle tileset", function () {
+          tileset.show = !tileset.show;
+          viewer.scene.requestRender();
+        });
+
+        Sandcastle.addToolbarButton("go tileset", function () {
+          viewer.zoomTo(tileset);
+        });
+
+        Sandcastle.addToolbarButton("toggle texcoords", function () {
+          viewer.scene._multitextureClampBuffer.debugShowTextureCoordinates = !viewer
+            .scene._multitextureClampBuffer.debugShowTextureCoordinates;
+          viewer.scene.requestRender();
+        });
+
+        Sandcastle.addToolbarButton("toggle debug texture", function () {
+          viewer.scene._multitextureClampBuffer.debugShowIntermediateTexture = !viewer
+            .scene._multitextureClampBuffer.debugShowIntermediateTexture;
+          viewer.scene.requestRender();
+        });
+
+        var camera = viewer.scene.camera;
+        Sandcastle.addToolbarButton("get cam", function () {
+          console.log("requested params for current camera view");
+          var position = camera.position;
+          var direction = camera.direction;
+          var up = camera.up;
+
+          console.log(
+            "\n\
+            Sandcastle.addToolbarButton(VIEW, function() {\n\
+                camera.flyTo({\n\
+                    destination : new Cesium.Cartesian3(" +
+              position.x +
+              ", " +
+              position.y +
+              ", " +
+              position.z +
+              "),\n\
+                    orientation : {\n\
+                        direction : new Cesium.Cartesian3(" +
+              direction.x +
+              ", " +
+              direction.y +
+              ", " +
+              direction.z +
+              "),\n\
+                        up : new Cesium.Cartesian3(" +
+              up.x +
+              ", " +
+              up.y +
+              ", " +
+              up.z +
+              ")\n\
+                    },\n\
+                    duration : 0.0\n\
+                });\n\
+            });"
+          );
+        });
+
+        Sandcastle.addToolbarButton("multifrustum split", function () {
+          camera.flyTo({
+            destination: new Cesium.Cartesian3(
+              6378508.430487708,
+              631.3907541046719,
+              -656.1962858339998
+            ),
+            orientation: {
+              direction: new Cesium.Cartesian3(
+                -0.3857572911380433,
+                -0.638454420387379,
+                0.6660084574700647
+              ),
+              up: new Cesium.Cartesian3(
+                0.9226002993353994,
+                -0.26695011534974855,
+                0.27847140532016446
+              ),
+            },
+            duration: 0.0,
+          });
+        });
+
+        Sandcastle.addToolbarButton("request render", function () {
+          viewer.scene.requestRender();
+        });
+
+        Sandcastle.addToolbarButton("toggle requestRenderMode", function () {
+          viewer.scene.requestRenderMode = !viewer.scene.requestRenderMode;
+        });
+
+        //Sandcastle_End
+        Sandcastle.finishedLoading();
+      }
+      if (typeof Cesium !== "undefined") {
+        startup(Cesium);
+      } else if (typeof require === "function") {
+        require(["Cesium"], startup);
+      }
+    </script>
+  </body>
+</html>

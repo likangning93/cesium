@@ -530,6 +530,115 @@ describe(
         fragmentShader: fsAtan2,
       }).contextToRender();
     });
+
+    it("has czm_intersectLineSegmentAABB2D", function () {
+      /******
+       * 2 *---*
+       *   |   |
+       * 1 | s-+-e
+       *   |   |
+       * 0 *---*
+       *   0 1 2 3
+       */
+      var fsStartInsideISX =
+        "void main() { " +
+        "  vec2 mn = vec2(0.0, 0.0);" +
+        "  vec2 mx = vec2(2.0, 2.0);" +
+        "  vec2 s = vec2(1.0, 1.0);" +
+        "  vec2 e = vec2(3.0, 1.0);" +
+        "  gl_FragColor = vec4(czm_intersectLineSegmentAABB2D(s, e, mn, mx));" +
+        "}";
+      expect({
+        context: context,
+        fragmentShader: fsStartInsideISX,
+      }).contextToRender();
+
+      /******
+       * 2 *---*
+       *   |   |
+       * 1 | e-+-s
+       *   |   |
+       * 0 *---*
+       *   0 1 2 3
+       */
+      var fsEndInsideISX =
+        "void main() { " +
+        "  vec2 mn = vec2(0.0, 0.0);" +
+        "  vec2 mx = vec2(2.0, 2.0);" +
+        "  vec2 e = vec2(1.0, 1.0);" +
+        "  vec2 s = vec2(3.0, 1.0);" +
+        "  gl_FragColor = vec4(czm_intersectLineSegmentAABB2D(s, e, mn, mx));" +
+        "}";
+      expect({
+        context: context,
+        fragmentShader: fsEndInsideISX,
+      }).contextToRender();
+
+      /******
+       * 2   *---*
+       *     |   |
+       * 1 s-+---+-e
+       *     |   |
+       * 0   *---*
+       *  -1 0 1 2 3
+       */
+      var fsCrossISX =
+        "void main() { " +
+        "  vec2 mn = vec2(0.0, 0.0);" +
+        "  vec2 mx = vec2(2.0, 2.0);" +
+        "  vec2 s = vec2(-1.0, 1.0);" +
+        "  vec2 e = vec2(3.0, 1.0);" +
+        "  gl_FragColor = vec4(czm_intersectLineSegmentAABB2D(s, e, mn, mx));" +
+        "}";
+      expect({
+        context: context,
+        fragmentShader: fsCrossISX,
+      }).contextToRender();
+
+      /******
+       * 2 *---*
+       *   |   |
+       * 1 |s-e|
+       *   |   |
+       * 0 *---*
+       *   0 1 2 3
+       */
+      var fsInsideISX =
+        "void main() { " +
+        "  vec2 mn = vec2(0.0, 0.0);" +
+        "  vec2 mx = vec2(2.0, 2.0);" +
+        "  vec2 s = vec2(0.5, 1.0);" +
+        "  vec2 e = vec2(1.5, 1.0);" +
+        "  gl_FragColor = vec4(czm_intersectLineSegmentAABB2D(s, e, mn, mx));" +
+        "}";
+      expect({
+        context: context,
+        fragmentShader: fsInsideISX,
+      }).contextToRender();
+
+      /******
+       * 3 s---e
+       *
+       * 2 *---*
+       *   |   |
+       * 1 |   |
+       *   |   |
+       * 0 *---*
+       *   0 1 2
+       */
+      var fsNoISX =
+        "void main() { " +
+        "  vec2 mn = vec2(0.0, 0.0);" +
+        "  vec2 mx = vec2(2.0, 2.0);" +
+        "  vec2 s = vec2(0.0, 3.0);" +
+        "  vec2 e = vec2(2.0, 3.0);" +
+        "  gl_FragColor = vec4(!czm_intersectLineSegmentAABB2D(s, e, mn, mx));" +
+        "}";
+      expect({
+        context: context,
+        fragmentShader: fsNoISX,
+      }).contextToRender();
+    });
   },
   "WebGL"
 );

@@ -165,6 +165,9 @@ function UniformState() {
   this._geometricToleranceOverMeter = undefined;
 
   this._minimumDisableDepthTestDistance = undefined;
+
+  this.numberOfFrustums = 0;
+  this.currentFrustumNumber = 0;
 }
 
 Object.defineProperties(UniformState.prototype, {

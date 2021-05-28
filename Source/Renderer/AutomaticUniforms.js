@@ -1,8 +1,10 @@
+import Cartesian2 from "../Core/Cartesian2.js";
 import Cartesian3 from "../Core/Cartesian3.js";
 import Matrix4 from "../Core/Matrix4.js";
 import WebGLConstants from "../Core/WebGLConstants.js";
 
 var viewerPositionWCScratch = new Cartesian3();
+var currentAndNumberFrustumsScratch = new Cartesian2();
 
 function AutomaticUniform(options) {
   this._size = options.size;
@@ -1619,6 +1621,18 @@ var AutomaticUniforms = {
     datatype: WebGLConstants.FLOAT_VEC3,
     getValue: function (uniformState) {
       return uniformState.ellipsoid.oneOverRadii;
+    },
+  }),
+
+  czm_currentAndNumberFrustums: new AutomaticUniform({
+    size: 1,
+    datatype: WebGLConstants.FLOAT_VEC2,
+    getValue: function (uniformState) {
+      var currentAndNumberFrustums = currentAndNumberFrustumsScratch;
+      currentAndNumberFrustums.x = uniformState.currentFrustumNumber;
+      currentAndNumberFrustums.y = uniformState.numberOfFrustums;
+
+      return currentAndNumberFrustums;
     },
   }),
 };

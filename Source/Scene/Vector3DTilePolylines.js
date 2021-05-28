@@ -21,6 +21,8 @@ import ShaderSource from "../Renderer/ShaderSource.js";
 import VertexArray from "../Renderer/VertexArray.js";
 import PolylineCommon from "../Shaders/PolylineCommon.js";
 import Vector3DTilePolylinesVS from "../Shaders/Vector3DTilePolylinesVS.js";
+import Vector3DTileLocalClampedPolylinesVS from "../Shaders/Vector3DTileLocalClampedPolylinesVS.js";
+import Vector3DTileLocalClampedPolylinesFS from "../Shaders/Vector3DTileLocalClampedPolylinesFS.js";
 import when from "../ThirdParty/when.js";
 import BlendingState from "./BlendingState.js";
 import Cesium3DTileFeature from "./Cesium3DTileFeature.js";
@@ -42,6 +44,7 @@ import Cesium3DTileFeature from "./Cesium3DTileFeature.js";
  * @param {Cesium3DTileBatchTable} options.batchTable The batch table for the tile containing the batched polylines.
  * @param {Uint16Array} options.batchIds The batch ids for each polyline.
  * @param {BoundingSphere} options.boundingVolume The bounding volume for the entire batch of polylines.
+ * @param {Cesium3DTileset} options.tileset The 3D Tileset that this tile content belongs to.
  *
  * @private
  */
@@ -61,11 +64,21 @@ function Vector3DTilePolylines(options) {
   this._boundingVolume = options.boundingVolume;
   this._batchTable = options.batchTable;
 
+  var tileset = options.tileset;
+  this._tileset = tileset;
+
   this._va = undefined;
+
   this._sp = undefined;
+  this._localClampedSp = undefined;
+
   this._rs = undefined;
+
   this._uniformMap = undefined;
+  this._localClampedUniformMap = undefined;
+
   this._command = undefined;
+  this._localClampedCommand = undefined;
 
   this._transferrableBatchIds = undefined;
   this._packedBuffer = undefined;
@@ -170,7 +183,10 @@ var attributeLocations = {
   nextPosition: 2,
   expandAndWidth: 3,
   a_batchId: 4,
+  a_cascadeIndex: 5,
 };
+
+var CASCADE_INDICES = new Uint16Array([0, 1, 2, 3]);
 
 function createVertexArray(polylines, context) {
   if (defined(polylines._va)) {
@@ -333,6 +349,23 @@ function createVertexArray(polylines, context) {
       },
     ];
 
+    var hasClassification = defined(polylines._tileset.classificationType);
+    var cascadeBuffer = Buffer.createVertexBuffer({
+      context: context,
+      typedArray: CASCADE_INDICES,
+      usage: BufferUsage.STATIC_DRAW,
+    });
+
+    if (hasClassification) {
+      vertexAttributes.push({
+        index: attributeLocations.a_cascadeIndex,
+        vertexBuffer: cascadeBuffer,
+        componentDatatype: ComponentDatatype.UNSIGNED_SHORT,
+        componentsPerAttribute: 1,
+        instanceDivisor: 1,
+      });
+    }
+
     polylines._va = new VertexArray({
       context: context,
       attributes: vertexAttributes,
@@ -342,7 +375,6 @@ function createVertexArray(polylines, context) {
     polylines._positions = undefined;
     polylines._widths = undefined;
     polylines._counts = undefined;
-
     polylines._ellipsoid = undefined;
     polylines._minimumHeight = undefined;
     polylines._maximumHeight = undefined;
@@ -392,6 +424,46 @@ function createUniformMap(primitive, context) {
   };
 }
 
+function createLocalClampedUniformMap(primitive, frameState) {
+  if (defined(primitive._localClampedUniformMap)) {
+    return;
+  }
+
+  var multitextureClampBuffer = frameState.multitextureClampBuffer;
+
+  primitive._localClampedUniformMap = {
+    u_modifiedModelViewToTangentSpace: function () {
+      var viewMatrix = frameState.context.uniformState.view;
+      Matrix4.clone(viewMatrix, modifiedModelViewScratch);
+      Matrix4.multiplyByPoint(
+        modifiedModelViewScratch,
+        primitive._center,
+        rtcScratch
+      );
+      Matrix4.setTranslation(
+        modifiedModelViewScratch,
+        rtcScratch,
+        modifiedModelViewScratch
+      );
+      Matrix4.multiply(
+        multitextureClampBuffer.eyeSpaceToTangentSpace,
+        modifiedModelViewScratch,
+        modifiedModelViewScratch
+      );
+      return modifiedModelViewScratch;
+    },
+    u_boundsTexture: function () {
+      return multitextureClampBuffer.boundsTexture;
+    },
+    u_boundingBoxMinMaxY: function () {
+      return multitextureClampBuffer.boundingBoxMinMaxY;
+    },
+    u_highlightColor: function () {
+      return primitive._highlightColor;
+    },
+  };
+}
+
 function createRenderStates(primitive) {
   if (defined(primitive._rs)) {
     return;
@@ -410,6 +482,29 @@ function createRenderStates(primitive) {
       enabled: true,
     },
     polygonOffset: polygonOffset,
+  });
+}
+
+function createLocalClampedRenderStates(textureWidth) {
+  var polygonOffset = {
+    enabled: true,
+    factor: -5.0,
+    units: -5.0,
+  };
+
+  return RenderState.fromCache({
+    blending: BlendingState.ALPHA_BLEND,
+    depthMask: false,
+    depthTest: {
+      enabled: true,
+    },
+    polygonOffset: polygonOffset,
+    viewport: {
+      x: 0,
+      y: 0,
+      width: textureWidth,
+      height: textureWidth,
+    },
   });
 }
 
@@ -458,6 +553,41 @@ function createShaders(primitive, context) {
   });
 }
 
+function createLocalClampedShaders(primitive, context) {
+  if (defined(primitive._localClampedSp)) {
+    return;
+  }
+
+  var batchTable = primitive._batchTable;
+
+  var vsSource = batchTable.getVertexShaderCallback(
+    false,
+    "a_batchId",
+    undefined
+  )(Vector3DTileLocalClampedPolylinesVS);
+  var fsSource = batchTable.getFragmentShaderCallback()(
+    Vector3DTileLocalClampedPolylinesFS,
+    false,
+    undefined
+  );
+
+  var vs = new ShaderSource({
+    defines: ["VECTOR_TILE"],
+    sources: [vsSource],
+  });
+  var fs = new ShaderSource({
+    defines: ["VECTOR_TILE"],
+    sources: [fsSource],
+  });
+
+  primitive._localClampedSp = ShaderProgram.fromCache({
+    context: context,
+    vertexShaderSource: vs,
+    fragmentShaderSource: fs,
+    attributeLocations: attributeLocations,
+  });
+}
+
 function queueCommands(primitive, frameState) {
   if (!defined(primitive._command)) {
     var uniformMap = primitive._batchTable.getUniformMapCallback()(
@@ -476,6 +606,42 @@ function queueCommands(primitive, frameState) {
   }
 
   frameState.commandList.push(primitive._command);
+}
+
+function queueLocalClampedCommands(primitive, frameState) {
+  var command = primitive._localClampedCommand;
+  var multitextureClampBuffer = frameState.multitextureClampBuffer;
+  var framebuffer = multitextureClampBuffer.framebuffer;
+
+  if (defined(command)) {
+    if (command.framebuffer !== framebuffer) command = undefined;
+  }
+
+  if (!defined(command)) {
+    var uniformMap = primitive._batchTable.getUniformMapCallback()(
+      primitive._localClampedUniformMap
+    );
+
+    var rs = createLocalClampedRenderStates(
+      multitextureClampBuffer.textureWidth
+    );
+
+    command = new DrawCommand({
+      owner: primitive,
+      vertexArray: primitive._va,
+      renderState: rs,
+      shaderProgram: primitive._localClampedSp,
+      uniformMap: uniformMap,
+      boundingVolume: primitive._boundingVolume,
+      pass: Pass.TERRAIN_CLASSIFICATION,
+      pickId: primitive._batchTable.getPickId(),
+      framebuffer: framebuffer,
+      instanceCount: 4,
+    });
+  }
+
+  primitive._localClampedCommand = command;
+  frameState.commandList.push(command);
 }
 
 /**
@@ -555,6 +721,13 @@ Vector3DTilePolylines.prototype.applyStyle = function (style, features) {
 Vector3DTilePolylines.prototype.update = function (frameState) {
   var context = frameState.context;
 
+  var hasClassification = defined(this._tileset.classificationType);
+
+  if (hasClassification) {
+    createLocalClampedUniformMap(this, frameState);
+    createLocalClampedShaders(this, context);
+  }
+
   createVertexArray(this, context);
   createUniformMap(this, context);
   createShaders(this, context);
@@ -566,7 +739,11 @@ Vector3DTilePolylines.prototype.update = function (frameState) {
 
   var passes = frameState.passes;
   if (passes.render || passes.pick) {
-    queueCommands(this, frameState);
+    if (hasClassification) {
+      queueLocalClampedCommands(this, frameState);
+    } else {
+      queueCommands(this, frameState);
+    }
   }
 };
 
@@ -597,6 +774,7 @@ Vector3DTilePolylines.prototype.isDestroyed = function () {
 Vector3DTilePolylines.prototype.destroy = function () {
   this._va = this._va && this._va.destroy();
   this._sp = this._sp && this._sp.destroy();
+  this._localClampedSp = this._localClampedSp && this._localClampedSp.destroy();
   return destroyObject(this);
 };
 export default Vector3DTilePolylines;

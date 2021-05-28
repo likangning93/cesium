@@ -34,6 +34,8 @@ function FrameState(context, creditDisplay, jobScheduler) {
    */
   this.shadowMaps = [];
 
+  this.multitextureClampBuffer = undefined;
+
   /**
    * The BRDF look up texture generator used for image-based lighting for PBR models
    * @type {BrdfLutGenerator}

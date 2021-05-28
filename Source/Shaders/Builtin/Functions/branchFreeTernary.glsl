@@ -1,5 +1,23 @@
 /**
  * Branchless ternary operator to be used when it's inexpensive to explicitly
+ * evaluate both possibilities for an int expression.
+ *
+ * @name czm_branchFreeTernary
+ * @glslFunction
+ *
+ * @param {bool} comparison A comparison statement
+ * @param {int} a Value to return if the comparison is true.
+ * @param {int} b Value to return if the comparison is false.
+ *
+ * @returns {int} equivalent of comparison ? a : b
+ */
+int czm_branchFreeTernary(bool comparison, int a, int b) {
+    int useA = int(comparison);
+    return a * useA + b * (1 - useA);
+}
+
+/**
+ * Branchless ternary operator to be used when it's inexpensive to explicitly
  * evaluate both possibilities for a float expression.
  *
  * @name czm_branchFreeTernary
